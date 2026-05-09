@@ -7,6 +7,7 @@ def predict_risk(features: dict, crop_type: str = "Maize") -> tuple[float, str]:
     ndvi_current = features.get("ndvi_current", 0.5)
     ndvi_historical = features.get("ndvi_historical", 0.5)
     rainfall = features.get("rainfall_30d_mm", 50)
+    rain_et = features.get("rain_minus_ref_et_30d_mm")
     temp = features.get("temp_avg_c", 25)
     soil_type = features.get("soil_type", "Loam")
     
@@ -44,6 +45,10 @@ def predict_risk(features: dict, crop_type: str = "Maize") -> tuple[float, str]:
         score += (35 * multiplier * soil_multiplier)
     elif rainfall < 25:
         score += (20 * multiplier * soil_multiplier)
+
+    # 2b. Water balance when Open-Meteo FAO ET₀ is available (rain − reference ET)
+    if rain_et is not None and rain_et < -35:
+        score += min(22.0, abs(rain_et + 35) * 0.12) * multiplier
         
     # 3. Heat Penalty
     if temp > 32:

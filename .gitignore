@@ -9,3 +9,9 @@ coverage/
 *.tmp
 *.bak
 .idea/
+
+# Local Open-Meteo cache (see backend/app/services/weather_cache.py)
+backend/data/weather_cache/
+backend/data/soil_cache/
+backend/data/vegetation_cache/
+backend/data/terrain_cache/

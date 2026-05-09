@@ -44,20 +44,55 @@ export interface CropCatalogItem {
   label: string;
 }
 
+/** Full feature payload from /analyze (weather + merged agronomic layers). */
+export interface AnalysisFeatures {
+  ndvi_current: number;
+  ndvi_historical: number;
+  rainfall_today_mm: number;
+  rainfall_30d_mm: number;
+  temp_high_c: number;
+  temp_low_c: number;
+  temp_avg_c: number;
+  soil_type?: string;
+  /** soilgrids_v2 | synthetic | error */
+  soil_source?: string;
+  soil_wrb_class_name?: string | null;
+  soil_probability_top?: unknown;
+  vegetation_source?: string;
+  ndvi_current_modis_date?: string | null;
+  ndvi_historical_modis_date?: string | null;
+  terrain_source?: string;
+  elevation_m?: number | null;
+  slope_deg?: number | null;
+  gdd_base_temp_c?: number | null;
+  gdd_accum_season_cd?: number | null;
+  gdd_30d_cd?: number | null;
+  gdd_source?: string;
+  ref_et_30d_mm?: number | null;
+  rain_minus_ref_et_30d_mm?: number | null;
+  evapotranspiration_source?: string;
+  us_county_fips?: string | null;
+  us_county_name?: string | null;
+  us_state_code?: string | null;
+  us_calibration_source?: string | null;
+  us_county_crop_note?: string | null;
+  pest_pressure_hints?: string[];
+  planting_calendar_note?: string;
+  agronomic_hints_source?: string;
+  soil_moisture_index?: number | null;
+  soil_moisture_source?: string;
+  /** Any future backend fields */
+  [key: string]: unknown;
+}
+
 export interface AnalysisData {
   region: string;
   crop_type: string;
+  coordinates?: { lat: number; lon: number };
+  /** open_meteo | synthetic_fallback */
+  weather_source?: string;
   focus_crop_id?: string | null;
-  features: {
-    ndvi_current: number;
-    ndvi_historical: number;
-    rainfall_today_mm: number;
-    rainfall_30d_mm: number;
-    temp_high_c: number;
-    temp_low_c: number;
-    temp_avg_c: number;
-    soil_type?: string;
-  };
+  features: AnalysisFeatures;
   risk_analysis: {
     score: number;
     level: string;

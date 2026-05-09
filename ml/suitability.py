@@ -155,7 +155,7 @@ def _temp_penalty(avg_t: float, profile: dict[str, Any]) -> float:
     return min(35.0, (avg_t - hi) * 2.2)
 
 
-def _water_penalty(rain30: float, profile: dict[str, Any]) -> float:
+def _water_penalty(rain30: float, profile: dict[str, Any], features: dict[str, Any]) -> float:
     ideal_lo = float(profile["rainfall_30d_ideal_min_mm"])
     ideal_hi = float(profile["rainfall_30d_ideal_max_mm"])
     min_r = float(profile["rainfall_30d_min_mm"])
@@ -163,16 +163,22 @@ def _water_penalty(rain30: float, profile: dict[str, Any]) -> float:
     flood = float(profile["waterlogging_rain_mm"])
 
     if rain30 < severe:
-        return 40.0
-    if rain30 < min_r:
-        return 28.0
-    if rain30 < ideal_lo:
-        return 12.0 + (ideal_lo - rain30) * 0.15
-    if rain30 > flood:
-        return 22.0
-    if rain30 > ideal_hi:
-        return 8.0 + (rain30 - ideal_hi) * 0.05
-    return 0.0
+        pen = 40.0
+    elif rain30 < min_r:
+        pen = 28.0
+    elif rain30 < ideal_lo:
+        pen = 12.0 + (ideal_lo - rain30) * 0.15
+    elif rain30 > flood:
+        pen = 22.0
+    elif rain30 > ideal_hi:
+        pen = 8.0 + (rain30 - ideal_hi) * 0.05
+    else:
+        pen = 0.0
+
+    net = features.get("rain_minus_ref_et_30d_mm")
+    if net is not None and net < -45:
+        pen += min(14.0, abs(net + 45) * 0.06)
+    return pen
 
 
 def _soil_adjustment(soil: str, profile: dict[str, Any]) -> float:
@@ -276,7 +282,7 @@ def _outlook_row_for_profile(
 
     pen = (
         _temp_penalty(avg_t, profile)
-        + _water_penalty(rain30, profile)
+        + _water_penalty(rain30, profile, features)
         + _soil_adjustment(soil, profile)
         + _ndvi_penalty(delta, profile)
         + _forecast_penalty(heat_days, max_dry_streak)

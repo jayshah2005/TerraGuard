@@ -20,6 +20,14 @@ from app.services.watsonx import (
     analyze_regional_env_insight_watson,
     fallback_regional_env_insight,
 )
+from app.services.weather import (
+    get_historical_weather,
+    get_forecast_daily,
+    assemble_weather_features,
+    forecast_for_chart,
+)
+from app.services import weather_cache
+from app.services.agronomic_bundle import merge_agronomic_site_features
 
 router = APIRouter()
 
@@ -75,6 +83,7 @@ class AnalyzeResponse(BaseModel):
     crop_outlook: list[CropOutlookRow]
     crop_guidance: list[CropGuidanceItem]
     focus_crop_id: str | None = None
+    weather_source: str = "synthetic_fallback"
 
 
 def _merge_portfolio_guidance(crop_outlook: list[dict], guidance: dict[str, tuple[str, str]]) -> None:
@@ -86,8 +95,8 @@ def _merge_portfolio_guidance(crop_outlook: list[dict], guidance: dict[str, tupl
             row["mitigate_text"] = mit
 
 
-def _build_env_bundle(req: RegionRequest):
-    """Shared deterministic environment for a coordinate pair."""
+def _build_env_bundle_synthetic(req: RegionRequest):
+    """Fallback: full synthetic env when Open-Meteo is unavailable."""
     seed_val = int(hashlib.md5(f"{req.lat:.2f},{req.lon:.2f}".encode()).hexdigest(), 16)
     random.seed(seed_val)
 
@@ -96,20 +105,12 @@ def _build_env_bundle(req: RegionRequest):
     if abs_lat < 15:
         base_temp = random.uniform(28, 34)
         base_rain = random.uniform(120, 250)
-        base_ndvi = random.uniform(0.6, 0.9)
-        soil_types = ["Clay", "Loam", "Sandy Clay"]
     elif abs_lat < 35:
         base_temp = random.uniform(32, 42)
         base_rain = random.uniform(0, 30)
-        base_ndvi = random.uniform(0.1, 0.3)
-        soil_types = ["Sandy", "Gravel", "Aridisol"]
     else:
         base_temp = random.uniform(15, 25)
         base_rain = random.uniform(40, 90)
-        base_ndvi = random.uniform(0.4, 0.7)
-        soil_types = ["Loam", "Silt", "Peat"]
-
-    soil = random.choice(soil_types)
 
     temp_high = base_temp + random.uniform(3, 6)
     temp_low = base_temp - random.uniform(3, 6)
@@ -118,14 +119,11 @@ def _build_env_bundle(req: RegionRequest):
     today_rain = max(0, base_rain / 30.0 + random.uniform(-2, 5))
 
     features = {
-        "ndvi_current": round(base_ndvi, 2),
-        "ndvi_historical": round(base_ndvi + random.uniform(-0.1, 0.1), 2),
         "rainfall_today_mm": round(today_rain, 1),
         "rainfall_30d_mm": round(base_rain, 1),
         "temp_high_c": round(temp_high, 1),
         "temp_low_c": round(temp_low, 1),
         "temp_avg_c": round(avg_temp, 1),
-        "soil_type": soil,
     }
 
     forecast = []
@@ -148,6 +146,41 @@ def _build_env_bundle(req: RegionRequest):
     return features, forecast
 
 
+def _resolve_weather_bundle(req: RegionRequest) -> tuple[dict, list, str]:
+    """
+    Open-Meteo when possible + disk cache; merge SoilGrids / MODIS / terrain / GDD / ET₀ layers.
+    Returns (features, forecast_chart, weather_source).
+    """
+    lat, lon = req.lat, req.lon
+
+    cached = weather_cache.read_valid(lat, lon)
+    if cached:
+        hist = cached.get("historical") or []
+        fc_daily = cached.get("forecast_daily") or []
+        wf = assemble_weather_features(lat, lon, hist, fc_daily)
+        chart = forecast_for_chart(fc_daily)
+        if wf and chart:
+            merged = {**wf, **merge_agronomic_site_features(lat, lon, hist, "open_meteo")}
+            return merged, chart, "open_meteo"
+
+    hist = get_historical_weather(lat, lon, days=45)
+    fc_daily = get_forecast_daily(lat, lon, forecast_days=8)
+    wf = assemble_weather_features(lat, lon, hist, fc_daily)
+    chart = forecast_for_chart(fc_daily)
+
+    if wf and chart:
+        try:
+            weather_cache.write_payload(lat, lon, hist, fc_daily)
+        except OSError as e:
+            print(f"Weather cache write failed: {e}")
+        merged = {**wf, **merge_agronomic_site_features(lat, lon, hist, "open_meteo")}
+        return merged, chart, "open_meteo"
+
+    features, forecast = _build_env_bundle_synthetic(req)
+    features.update(merge_agronomic_site_features(lat, lon, [], "synthetic_fallback"))
+    return features, forecast, "synthetic_fallback"
+
+
 @router.get("/crops", response_model=list[CropSummary])
 async def list_crops():
     """Catalog for search UI (no suitability computed)."""
@@ -157,7 +190,7 @@ async def list_crops():
 @router.post("/analyze")
 async def analyze_region(req: RegionRequest):
     try:
-        features, forecast = _build_env_bundle(req)
+        features, forecast, weather_source = _resolve_weather_bundle(req)
         forecast_stress_summary = summarize_forecast_stress(forecast)
 
         focus_id = (req.focus_crop_id or "").strip() or None
@@ -199,6 +232,7 @@ async def analyze_region(req: RegionRequest):
                 crop_outlook=[CropOutlookRow.model_validate(row) for row in crop_outlook],
                 crop_guidance=crop_guidance,
                 focus_crop_id=profile["id"],
+                weather_source=weather_source,
             )
             return payload.model_dump()
 
@@ -228,6 +262,7 @@ async def analyze_region(req: RegionRequest):
             crop_outlook=crop_outlook,
             crop_guidance=crop_guidance,
             focus_crop_id=None,
+            weather_source=weather_source,
         )
         return payload.model_dump()
     except HTTPException:

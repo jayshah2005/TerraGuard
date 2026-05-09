@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import InsightsPanel from '../components/InsightsPanel';
 import type { AnalysisData, CropOutlookRow } from '../types/analysis';
@@ -16,7 +16,7 @@ function regionLabel(lat: number, lng: number) {
 }
 
 function upsertCropRow(prev: CropOutlookRow[], incoming: CropOutlookRow): CropOutlookRow[] {
-  const i = prev.findIndex((r) => r.id === incoming.id);
+  const i = prev.findIndex((r) => r.id.toLowerCase() === incoming.id.toLowerCase());
   if (i === -1) return [...prev, incoming];
   const next = [...prev];
   next[i] = incoming;
@@ -28,9 +28,13 @@ export default function Home() {
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [stackedCropOutlook, setStackedCropOutlook] = useState<CropOutlookRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingCrop, setLoadingCrop] = useState(false);
+  const [loadingCropId, setLoadingCropId] = useState<string | null>(null);
+  const cropOutlookInflightRef = useRef<{ cropId: string; controller: AbortController } | null>(null);
 
   const runAnalysis = useCallback(async (lat: number, lng: number) => {
+    cropOutlookInflightRef.current?.controller.abort();
+    cropOutlookInflightRef.current = null;
+    setLoadingCropId(null);
     setLoading(true);
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
@@ -55,12 +59,29 @@ export default function Home() {
     }
   }, []);
 
-  const loadCropFocus = useCallback(
-    async (cropId: string) => {
+  const handleCropSelectionChange = useCallback(
+    async (cropId: string, selected: boolean) => {
       if (!selectedLocation) return;
-      const { lat, lng } = selectedLocation;
-      setLoadingCrop(true);
+      const idNorm = cropId.trim().toLowerCase();
+
+      if (!selected) {
+        setStackedCropOutlook((prev) => prev.filter((r) => r.id.toLowerCase() !== idNorm));
+        const inf = cropOutlookInflightRef.current;
+        if (inf && inf.cropId.toLowerCase() === idNorm) {
+          inf.controller.abort();
+          cropOutlookInflightRef.current = null;
+          setLoadingCropId(null);
+        }
+        return;
+      }
+
+      cropOutlookInflightRef.current?.controller.abort();
+      const controller = new AbortController();
+      cropOutlookInflightRef.current = { cropId, controller };
+
+      setLoadingCropId(cropId);
       try {
+        const { lat, lng } = selectedLocation;
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
         const response = await fetch(`${backendUrl}/api/v1/analyze`, {
           method: 'POST',
@@ -71,6 +92,7 @@ export default function Home() {
             region_name: regionLabel(lat, lng),
             focus_crop_id: cropId,
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) throw new Error('Crop outlook failed');
@@ -87,39 +109,18 @@ export default function Home() {
           }
           return merged;
         });
-      } catch (error) {
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') return;
         console.error('Error loading crop outlook:', error);
       } finally {
-        setLoadingCrop(false);
+        if (!controller.signal.aborted) {
+          cropOutlookInflightRef.current = null;
+          setLoadingCropId(null);
+        }
       }
     },
     [selectedLocation]
   );
-
-  const clearAllCropComparisons = useCallback(async () => {
-    if (!selectedLocation) return;
-    const { lat, lng } = selectedLocation;
-    setLoadingCrop(true);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-      const response = await fetch(`${backendUrl}/api/v1/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lat,
-          lon: lng,
-          region_name: regionLabel(lat, lng),
-        }),
-      });
-      if (!response.ok) throw new Error('Analysis failed');
-      setAnalysisData(await response.json());
-      setStackedCropOutlook([]);
-    } catch (error) {
-      console.error('Error resetting analysis:', error);
-    } finally {
-      setLoadingCrop(false);
-    }
-  }, [selectedLocation]);
 
   const handleLocationSelect = async (lat: number, lng: number) => {
     setSelectedLocation({ lat, lng });
@@ -127,8 +128,8 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen bg-slate-50 flex-col">
-      <header className="bg-white shadow-sm border-b px-8 py-4 flex items-center justify-between z-10 w-full">
+    <main className="flex h-[100dvh] max-h-[100dvh] flex-col bg-slate-50 overflow-hidden">
+      <header className="shrink-0 bg-white shadow-sm border-b px-8 py-4 flex items-center justify-between z-10 w-full">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-lg">T</span>
@@ -143,13 +144,13 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        <section className="w-2/3 p-6 flex flex-col h-full relative">
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        <section className="w-2/3 p-6 flex flex-col min-h-0 overflow-hidden relative">
           <div className="mb-4 flex-none">
             <h2 className="text-lg font-bold text-slate-800">Global Monitoring</h2>
             <p className="text-sm text-slate-500">
-              Select a region for climate signals and regional guidance. Per-crop suitability runs only after you search and pick a crop in{' '}
-              <span className="font-semibold text-slate-700">Crop outlook</span>. Add several crops to compare side by side.
+              Select a region for climate signals and regional guidance. Open <span className="font-semibold text-slate-700">Crop outlook</span>, search the
+              catalog, and tick crops to compare suitability side by side.
             </p>
           </div>
           <div className="flex-1 rounded-2xl relative z-0 min-h-[320px]">
@@ -157,14 +158,13 @@ export default function Home() {
           </div>
         </section>
 
-        <aside className="w-1/3 h-full min-w-[320px]">
+        <aside className="w-1/3 min-w-[280px] max-w-xl shrink-0 flex flex-col min-h-0 overflow-hidden border-l border-slate-200 bg-white shadow-xl">
           <InsightsPanel
             data={analysisData}
             stackedCropOutlook={stackedCropOutlook}
             loading={loading}
-            loadingCrop={loadingCrop}
-            onSelectCrop={loadCropFocus}
-            onClearAllCrops={clearAllCropComparisons}
+            loadingCropId={loadingCropId}
+            onCropSelectionChange={handleCropSelectionChange}
           />
         </aside>
       </div>
