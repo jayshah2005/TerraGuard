@@ -20,10 +20,14 @@ export interface CropOutlookRow {
   label: string;
   suitability_score: number;
   band: string;
+  planting_verdict: string;
+  planting_rationale: string;
   stress: Record<string, boolean>;
   deterministic_notes: string;
   forecast_heat_days: number;
   forecast_max_dry_streak: number;
+  forecast_heat_threshold_c: number;
+  forecast_dry_rain_mm_per_day: number;
   risks_text: string;
   mitigate_text: string;
 }
@@ -35,9 +39,15 @@ export interface CropGuidanceItem {
   mitigate_text: string;
 }
 
+export interface CropCatalogItem {
+  id: string;
+  label: string;
+}
+
 export interface AnalysisData {
   region: string;
   crop_type: string;
+  focus_crop_id?: string | null;
   features: {
     ndvi_current: number;
     ndvi_historical: number;
@@ -52,7 +62,7 @@ export interface AnalysisData {
     score: number;
     level: string;
   };
-  ai_insight: string;
+  ai_insight: string | null;
   forecast?: ForecastDay[];
   forecast_stress_summary?: ForecastStressSummary;
   crop_outlook?: CropOutlookRow[];

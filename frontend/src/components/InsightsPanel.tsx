@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Leaf, Droplets, ThermometerSun, AlertTriangle, Info, MountainSnow, Sprout, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Leaf, Droplets, ThermometerSun, AlertTriangle, Info, MountainSnow, Sprout, ChevronDown, ChevronRight, Search, Loader2 } from 'lucide-react';
 import { ComposedChart, Line, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import type { AnalysisData, CropOutlookRow } from '../types/analysis';
+import type { AnalysisData, CropOutlookRow, CropCatalogItem } from '../types/analysis';
 
 const STRESS_LABELS: Record<string, string> = {
   heat_stress: 'Heat',
@@ -21,7 +21,6 @@ function suitabilityBarColor(score: number): string {
   return 'bg-rose-500';
 }
 
-/** Visible fill width: score of 0 still shows a sliver so the bar is never "missing". */
 function suitabilityBarWidthPercent(score: number): number {
   const s = Math.min(100, Math.max(0, score));
   if (s <= 0) return 8;
@@ -34,29 +33,61 @@ function bandTextClass(band: string): string {
   return 'text-rose-700';
 }
 
+function verdictBannerClass(band: string): string {
+  if (band === 'Good') return 'bg-emerald-100 border-emerald-200 text-emerald-950';
+  if (band === 'Fair') return 'bg-amber-100 border-amber-200 text-amber-950';
+  return 'bg-rose-100 border-rose-200 text-rose-950';
+}
+
 type SidebarTab = 'analysis' | 'outlook';
 
 interface Props {
   data: AnalysisData | null;
+  stackedCropOutlook: CropOutlookRow[];
   loading: boolean;
+  loadingCrop: boolean;
+  onSelectCrop: (cropId: string) => void;
+  onClearAllCrops: () => void;
 }
 
-export default function InsightsPanel({ data, loading }: Props) {
+export default function InsightsPanel({ data, stackedCropOutlook, loading, loadingCrop, onSelectCrop, onClearAllCrops }: Props) {
   const [tab, setTab] = useState<SidebarTab>('analysis');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cropSearch, setCropSearch] = useState('');
+  const [catalog, setCatalog] = useState<CropCatalogItem[]>([]);
 
   useEffect(() => {
     setExpandedId(null);
     setCropSearch('');
   }, [data?.region]);
 
-  const filteredOutlook = useMemo(() => {
-    const rows = data?.crop_outlook ?? [];
+  useEffect(() => {
+    if (!data) return;
+    let cancelled = false;
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    fetch(`${backendUrl}/api/v1/crops`)
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load crop catalog');
+        return r.json();
+      })
+      .then((rows: CropCatalogItem[]) => {
+        if (!cancelled) setCatalog(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.region]);
+
+  const filteredCatalog = useMemo(() => {
     const q = cropSearch.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => r.label.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
-  }, [data?.crop_outlook, cropSearch]);
+    if (q.length < 2) return [];
+    return catalog
+      .filter((c) => c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [catalog, cropSearch]);
 
   if (loading) {
     return (
@@ -77,7 +108,8 @@ export default function InsightsPanel({ data, loading }: Props) {
     );
   }
 
-  const { features, risk_analysis, ai_insight, forecast, crop_type, forecast_stress_summary, crop_outlook } = data;
+  const { features, risk_analysis, ai_insight, forecast, crop_type, forecast_stress_summary } = data;
+  const hasCropFocus = stackedCropOutlook.length > 0;
 
   let riskColorBg = 'bg-emerald-500';
   if (risk_analysis.level === 'Critical' || risk_analysis.level === 'High') {
@@ -87,19 +119,23 @@ export default function InsightsPanel({ data, loading }: Props) {
   }
 
   const renderCropCards = (rows: CropOutlookRow[]) => (
-    <div className="space-y-2">
-      {rows.length === 0 && (
-        <p className="text-sm text-gray-500 py-6 text-center">No crops match that search.</p>
-      )}
+    <div className="space-y-3">
       {rows.map((row: CropOutlookRow) => {
         const open = expandedId === row.id;
         const activeStress = Object.entries(row.stress || {}).filter(([, v]) => v);
         const barW = suitabilityBarWidthPercent(row.suitability_score);
+        const heatThr = row.forecast_heat_threshold_c ?? 0;
+        const dryThr = row.forecast_dry_rain_mm_per_day ?? 0;
+        const fcDays = forecast?.length ?? 7;
         return (
           <div
             key={row.id}
             className={`rounded-lg border bg-white transition-shadow ${open ? 'ring-2 ring-emerald-500/80 border-emerald-200' : 'border-slate-200'}`}
           >
+            <div className={`mx-3 mt-3 rounded-lg border px-3 py-2 text-sm ${verdictBannerClass(row.band)}`}>
+              <p className="font-bold leading-tight">{row.planting_verdict ?? '—'}</p>
+              <p className="text-xs mt-1 opacity-90 leading-snug">{row.planting_rationale ?? ''}</p>
+            </div>
             <button
               type="button"
               onClick={() => setExpandedId(open ? null : row.id)}
@@ -113,11 +149,20 @@ export default function InsightsPanel({ data, loading }: Props) {
                 </div>
                 <span className="text-sm font-bold text-gray-800 tabular-nums">{row.suitability_score.toFixed(0)}</span>
               </div>
-              <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className={`h-full min-w-[6px] rounded-full transition-all ${suitabilityBarColor(row.suitability_score)}`}
-                  style={{ width: `${barW}%` }}
-                />
+              <div>
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Suitability</span>
+                  <span className="text-xs text-gray-500 tabular-nums">
+                    {row.suitability_score.toFixed(0)} / 100
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full min-w-[6px] rounded-full transition-all ${suitabilityBarColor(row.suitability_score)}`}
+                    style={{ width: `${barW}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">Higher = better match for this site (not a “risk” meter).</p>
               </div>
               <div className="flex flex-wrap gap-1">
                 {activeStress.length === 0 && (
@@ -144,9 +189,17 @@ export default function InsightsPanel({ data, loading }: Props) {
                   <span className="font-semibold text-emerald-800">Mitigate: </span>
                   {row.mitigate_text}
                 </p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Forecast windows: {row.forecast_heat_days} hot day(s) vs crop threshold; max {row.forecast_max_dry_streak} consecutive dry day(s) (crop-specific rain cutoff).
-                </p>
+                <div className="mt-3 text-xs text-gray-600 leading-relaxed border-t border-slate-200 pt-2">
+                  <p className="font-semibold text-gray-800 mb-1">Next 7 days vs this crop&apos;s thresholds</p>
+                  <p>
+                    <span className="font-medium text-gray-700">{row.forecast_heat_days}</span> of <span className="font-medium">{fcDays}</span> forecast days have
+                    daily high ≥ <span className="font-medium">{heatThr}°C</span> (this crop&apos;s heat-stress cutoff for the short-range outlook).
+                  </p>
+                  <p className="mt-1">
+                    Longest run of days with rain below <span className="font-medium">{dryThr} mm</span>/day:{' '}
+                    <span className="font-medium">{row.forecast_max_dry_streak}</span> day(s) (crop-specific &quot;very dry&quot; day threshold).
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -154,6 +207,8 @@ export default function InsightsPanel({ data, loading }: Props) {
       })}
     </div>
   );
+
+  const showSearchResults = cropSearch.trim().length >= 2 && !loadingCrop;
 
   return (
     <div className="p-6 h-full overflow-y-auto w-full bg-white text-gray-900 shadow-xl border-l flex flex-col gap-4">
@@ -188,11 +243,15 @@ export default function InsightsPanel({ data, loading }: Props) {
                 <span className="text-sm uppercase tracking-wider font-semibold opacity-90">Risk Score</span>
                 <Info className="w-4 h-4 opacity-70" />
                 <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
-                  Heuristic failure risk for the highest suitability-ranked crop ({crop_type}) using the local rules engine—compare all crops under the Crop outlook tab.
+                  {hasCropFocus
+                    ? `Heuristic failure risk for ${crop_type} (most recently loaded crop) using the local rules engine.`
+                    : 'Placeholder risk using Maize as a baseline until you load a crop under Crop outlook (then this updates to the latest crop you add).'}
                 </div>
               </div>
             </div>
-            <p className="text-xs opacity-90 mt-1 font-medium">Top-ranked match: {crop_type || '—'}</p>
+            <p className="text-xs opacity-90 mt-1 font-medium">
+              {hasCropFocus ? `Latest crop loaded: ${crop_type}` : `Baseline crop: ${crop_type} (load a crop for a tailored score)`}
+            </p>
             <div className="flex items-end justify-between mt-2">
               <span className="text-4xl font-extrabold">{risk_analysis.score.toFixed(1)}%</span>
               <span className="text-xl font-medium">{risk_analysis.level}</span>
@@ -272,7 +331,9 @@ export default function InsightsPanel({ data, loading }: Props) {
               <div className="bg-blue-600 px-3 py-1 rounded-full text-xs font-bold text-white tracking-wide">IBM watsonx.ai</div>
               <h3 className="ml-3 font-semibold text-gray-800">Regional crop fit</h3>
             </div>
-            <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 text-blue-900 text-sm leading-relaxed shadow-inner">{ai_insight}</div>
+            <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 text-blue-900 text-sm leading-relaxed shadow-inner">
+              {ai_insight ?? '—'}
+            </div>
           </div>
 
           {forecast && forecast.length > 0 && (
@@ -320,7 +381,7 @@ export default function InsightsPanel({ data, loading }: Props) {
         </>
       )}
 
-      {tab === 'outlook' && crop_outlook && crop_outlook.length > 0 && (
+      {tab === 'outlook' && (
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/80 shadow-sm flex flex-col gap-3 flex-1 min-h-0">
           <div className="flex items-center gap-2">
             <Sprout className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -328,10 +389,16 @@ export default function InsightsPanel({ data, loading }: Props) {
             <div className="relative group ml-auto cursor-help">
               <Info className="w-4 h-4 text-gray-400" />
               <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
-                Suitability is deterministic from soil, climate, NDVI, and the 7-day forecast. Search filters the catalog; expand a row for risks and mitigations (watsonx for a subset, templates otherwise).
+                Search the catalog. Each selection loads suitability + one IBM watsonx guidance pass. Multiple crops stay on screen for comparison.
               </div>
             </div>
           </div>
+
+          <p className="text-sm text-gray-600">
+            {hasCropFocus
+              ? `Comparing ${stackedCropOutlook.length} crop(s). Search below to add or replace by re-selecting the same crop.`
+              : `Type at least two letters to search. Pick a crop to load suitability, stress flags, and guidance.`}
+          </p>
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -339,11 +406,31 @@ export default function InsightsPanel({ data, loading }: Props) {
               type="search"
               value={cropSearch}
               onChange={(e) => setCropSearch(e.target.value)}
-              placeholder="Search crops…"
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              placeholder="Search crops (e.g. wheat, tomato)…"
+              disabled={loadingCrop}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
               aria-label="Search crops"
             />
           </div>
+
+          {loadingCrop && (
+            <div className="flex items-center gap-2 text-sm text-gray-600 py-2">
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+              Loading crop outlook…
+            </div>
+          )}
+
+          {hasCropFocus && !loadingCrop && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onClearAllCrops()}
+                className="text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200"
+              >
+                Clear all comparisons
+              </button>
+            </div>
+          )}
 
           {forecast_stress_summary && (
             <p className="text-xs text-gray-600 leading-relaxed">
@@ -353,12 +440,37 @@ export default function InsightsPanel({ data, loading }: Props) {
             </p>
           )}
 
-          <div className="overflow-y-auto flex-1 pr-1 -mr-1 max-h-[calc(100vh-220px)]">{renderCropCards(filteredOutlook)}</div>
-        </div>
-      )}
+          {hasCropFocus && (
+            <div className="overflow-y-auto flex-1 pr-1 -mr-1 max-h-[min(48vh,420px)] border-b border-slate-200 pb-3">
+              {renderCropCards(stackedCropOutlook)}
+            </div>
+          )}
 
-      {tab === 'outlook' && (!crop_outlook || crop_outlook.length === 0) && (
-        <p className="text-sm text-gray-500">Run an analysis to load crop outlook.</p>
+          {!showSearchResults && !hasCropFocus && (
+            <p className="text-xs text-gray-500 py-4 text-center">Enter at least 2 characters to search the catalog.</p>
+          )}
+
+          {showSearchResults && (
+            <div>
+              {hasCropFocus && <p className="text-xs font-semibold text-gray-700 mb-2">Add another crop</p>}
+              <ul className="overflow-y-auto max-h-[min(40vh,360px)] space-y-1 border border-slate-200 rounded-lg bg-white p-2">
+                {filteredCatalog.length === 0 && <li className="text-sm text-gray-500 px-2 py-3 text-center">No matching crops.</li>}
+                {filteredCatalog.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectCrop(c.id)}
+                      className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-emerald-50 border border-transparent hover:border-emerald-100"
+                    >
+                      <span className="font-medium">{c.label}</span>
+                      <span className="text-xs text-gray-400 ml-2 font-mono">{c.id}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

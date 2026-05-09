@@ -104,26 +104,16 @@ Reply:
         return None, None, "Warning: Unable to generate remote insights due to an API error."
 
 
-def analyze_regional_crop_fit_insight_watson(
-    features: dict,
-    forecast_summary: dict,
-    crop_outlook: list[dict],
-) -> str | None:
+def analyze_regional_env_insight_watson(features: dict, forecast_summary: dict) -> str | None:
     """
-    First watsonx call in multi-crop flow: narrative on which crops fit the site.
-    Returns plain insight text, or None if offline / parse failure (caller uses fallback).
+    Regional narrative without per-crop scores: what generally grows well under these conditions.
+    Used on initial map analyze (before user picks a crop from catalog).
     """
     model = get_watsonx_model(220)
-    if not model or not crop_outlook:
+    if not model:
         return None
 
-    ranked_lines = "\n".join(
-        f"- {c['label']}: suitability_score={c.get('suitability_score')} band={c.get('band')}; "
-        f"notes={str(c.get('deterministic_notes', ''))[:120]}"
-        for c in crop_outlook
-    )
-
-    prompt = f"""You are an agricultural advisor. Use ONLY the deterministic crop ranking and environmental facts below — do not invent rainfall or temperature values.
+    prompt = f"""You are an agricultural advisor. Use ONLY the environmental facts below — do not invent numbers.
 
 Site facts:
 - Soil: {features.get('soil_type', 'Unknown')}
@@ -132,10 +122,7 @@ Site facts:
 - Avg temperature (C): {features.get('temp_avg_c')}
 - 7-day outlook summary: cumulative_rain_mm={forecast_summary.get('cumulative_rain_mm')}, max_high_c={forecast_summary.get('max_high_c')}, min_low_c={forecast_summary.get('min_low_c')}, days_high_ge_32c={forecast_summary.get('days_high_ge_32c')}, max_consecutive_dry_days={forecast_summary.get('max_consecutive_dry_days')}
 
-Crops ranked by modeled suitability (higher score = better fit):
-{ranked_lines}
-
-Write exactly 2 or 3 sentences explaining which crops are stronger fits for this region, which are weaker, and the main reasons (water, heat, soil, or short-term forecast stress).
+Write exactly 2 or 3 sentences on what broad categories of crops (e.g. cool-season vs warm-season, drought-tolerant vs water-loving) are more or less likely to succeed here and why. Do not name specific catalog scores.
 
 You MUST reply in exactly this format with NO other text:
 INSIGHT: [your text]
@@ -148,24 +135,25 @@ Reply:
         m = re.search(r"INSIGHT:\s*(.+)", generated, re.DOTALL | re.IGNORECASE)
         if m:
             return m.group(1).strip()
-        print(f"Failed to parse regional insight: {generated}")
+        print(f"Failed to parse regional env insight: {generated}")
         return None
     except Exception as e:
-        print(f"Error querying Watsonx regional insight: {e}")
+        print(f"Error querying Watsonx regional env insight: {e}")
         return None
 
 
-def fallback_regional_crop_insight(crop_outlook: list[dict]) -> str:
-    if not crop_outlook:
-        return "Select a location to see which crops best match modeled soil, climate, and near-term forecast stress."
-    best = crop_outlook[0]
-    worst = crop_outlook[-1]
-    mid = crop_outlook[len(crop_outlook) // 2]
+def fallback_regional_env_insight(features: dict, forecast_summary: dict) -> str:
+    soil = features.get("soil_type", "Unknown")
+    rain = float(features.get("rainfall_30d_mm", 0))
+    t = float(features.get("temp_avg_c", 20))
+    hot_days = forecast_summary.get("days_high_ge_32c", 0)
+    dry_streak = forecast_summary.get("max_consecutive_dry_days", 0)
     return (
-        f"Modeled suitability is highest for {best['label']} (score {best['suitability_score']}, {best['band']}) "
-        f"and comparatively weakest for {worst['label']} (score {worst['suitability_score']}, {worst['band']}). "
-        f"Crops near the middle such as {mid['label']} may work with targeted water and soil management. "
-        f"(Demo mode or offline: rule-based summary.)"
+        f"From modeled conditions (soil {soil}, ~{t:.0f}°C average, {rain:.0f} mm rain / 30d, "
+        f"{hot_days} hot day(s) and up to {dry_streak} dry day(s) in the next-week proxy), "
+        f"expect warm-season and drought-tolerant options to fare better when moisture is limited, "
+        f"and water-loving or cool-season crops to need irrigation or timing adjustments. "
+        f"Open Crop outlook and search the catalog for a specific crop to load tailored suitability."
     )
 
 

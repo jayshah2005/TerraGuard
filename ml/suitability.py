@@ -27,6 +27,24 @@ def _band(score: float) -> str:
     return "Poor"
 
 
+def _planting_verdict(band: str, label: str) -> tuple[str, str]:
+    """Headline + one-line rationale for demo (deterministic, no LLM)."""
+    if band == "Good":
+        return (
+            "Favorable to plant",
+            f"Modeled suitability for {label} is strong at this site for the mock climate/soil stack—still validate locally.",
+        )
+    if band == "Fair":
+        return (
+            "Marginal — plan management",
+            f"{label} may work with irrigation, variety choice, or adjusted planting dates; monitor heat and moisture closely.",
+        )
+    return (
+        "Not recommended to plant",
+        f"Modeled fit for {label} is weak here unless major mitigations apply; consider alternatives or heavy intervention.",
+    )
+
+
 def summarize_forecast_stress(forecast: list[dict[str, Any]]) -> dict[str, Any]:
     """Region-level 7-day stats (no per-crop IBM calls)."""
     if not forecast:
@@ -241,13 +259,11 @@ def fallback_guidance(
     return " ".join(risk_bits), " ".join(mit_bits)
 
 
-def compute_crop_outlook(
+def _outlook_row_for_profile(
     features: dict[str, Any],
     forecast: list[dict[str, Any]],
-    crop_profiles: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Return sorted outlook rows (best suitability first)."""
-    rows: list[dict[str, Any]] = []
+    profile: dict[str, Any],
+) -> dict[str, Any]:
     soil = str(features.get("soil_type", ""))
     avg_t = float(features.get("temp_avg_c", 20))
     rain30 = float(features.get("rainfall_30d_mm", 0))
@@ -255,35 +271,48 @@ def compute_crop_outlook(
     ndvi_h = float(features.get("ndvi_historical", 0.5))
     delta = ndvi_c - ndvi_h
 
-    for profile in crop_profiles:
-        heat_days, _dry_days, max_dry_streak = _forecast_metrics_for_crop(forecast, profile)
-        stress = _build_stress(features, forecast, profile, heat_days, max_dry_streak)
+    heat_days, _dry_days, max_dry_streak = _forecast_metrics_for_crop(forecast, profile)
+    stress = _build_stress(features, forecast, profile, heat_days, max_dry_streak)
 
-        pen = (
-            _temp_penalty(avg_t, profile)
-            + _water_penalty(rain30, profile)
-            + _soil_adjustment(soil, profile)
-            + _ndvi_penalty(delta, profile)
-            + _forecast_penalty(heat_days, max_dry_streak)
-        )
-        score = max(0.0, min(100.0, 100.0 - pen))
-        note = _deterministic_note(stress)
-        risks, mit = fallback_guidance(profile["label"], stress, features)
+    pen = (
+        _temp_penalty(avg_t, profile)
+        + _water_penalty(rain30, profile)
+        + _soil_adjustment(soil, profile)
+        + _ndvi_penalty(delta, profile)
+        + _forecast_penalty(heat_days, max_dry_streak)
+    )
+    score = max(0.0, min(100.0, 100.0 - pen))
+    note = _deterministic_note(stress)
+    risks, mit = fallback_guidance(profile["label"], stress, features)
+    band = _band(score)
+    verdict, rationale = _planting_verdict(band, profile["label"])
+    heat_thr = round(float(profile["forecast_heat_day_c"]), 1)
+    dry_thr = round(float(profile["forecast_dry_day_mm"]), 2)
 
-        rows.append(
-            {
-                "id": profile["id"],
-                "label": profile["label"],
-                "suitability_score": round(score, 1),
-                "band": _band(score),
-                "stress": dict(stress),
-                "deterministic_notes": note,
-                "forecast_heat_days": heat_days,
-                "forecast_max_dry_streak": max_dry_streak,
-                "risks_text": risks,
-                "mitigate_text": mit,
-            }
-        )
+    return {
+        "id": profile["id"],
+        "label": profile["label"],
+        "suitability_score": round(score, 1),
+        "band": band,
+        "planting_verdict": verdict,
+        "planting_rationale": rationale,
+        "stress": dict(stress),
+        "deterministic_notes": note,
+        "forecast_heat_days": heat_days,
+        "forecast_max_dry_streak": max_dry_streak,
+        "forecast_heat_threshold_c": heat_thr,
+        "forecast_dry_rain_mm_per_day": dry_thr,
+        "risks_text": risks,
+        "mitigate_text": mit,
+    }
 
-    rows.sort(key=lambda r: r["suitability_score"], reverse=True)
-    return rows
+
+def compute_single_crop_outlook(
+    features: dict[str, Any],
+    forecast: list[dict[str, Any]],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    """One catalog crop: deterministic suitability + template guidance (watsonx merged in API)."""
+    return _outlook_row_for_profile(features, forecast, profile)
+
+

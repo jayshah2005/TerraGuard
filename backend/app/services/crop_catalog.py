@@ -47,3 +47,16 @@ def load_crop_profiles() -> tuple[CropProfile, ...]:
 
 def get_profiles_as_dicts() -> list[dict[str, Any]]:
     return [p.model_dump_public() for p in load_crop_profiles()]
+
+
+def get_catalog_summaries() -> list[dict[str, str]]:
+    """Lightweight id + label for search UI (no scoring)."""
+    return [{"id": p.id, "label": p.label} for p in load_crop_profiles()]
+
+
+def get_profile_dict_by_id(crop_id: str) -> dict[str, Any] | None:
+    cid = crop_id.strip().lower()
+    for p in load_crop_profiles():
+        if p.id.lower() == cid:
+            return p.model_dump_public()
+    return None
