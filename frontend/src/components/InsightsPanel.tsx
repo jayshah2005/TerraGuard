@@ -453,8 +453,6 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
             <p className="text-xs text-gray-500 py-2 text-center">Enter at least 2 characters to search the catalog.</p>
           )}
 
-          <RegionalSignalsAudit features={features} weatherSource={weather_source} coordinates={coordinates} />
-
           {forecast_stress_summary && (
             <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-emerald-200 pl-2">
               Week-wide rain, heat, and dry-run stats match the <span className="font-semibold text-slate-700">Short-range field outlook</span> on the

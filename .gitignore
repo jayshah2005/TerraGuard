@@ -10,6 +10,9 @@ coverage/
 *.bak
 .idea/
 
+.next/
+frontend/node_modules/
+
 # Local Open-Meteo cache (see backend/app/services/weather_cache.py)
 backend/data/weather_cache/
 backend/data/soil_cache/
