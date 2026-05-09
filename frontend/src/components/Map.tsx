@@ -1,33 +1,54 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { MapContainer, TileLayer, useMapEvents, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-// For Next.js to dynamically import Leaflet without SSR issues
-export default function Map() {
-  const [mounted, setMounted] = useState(false);
+// Fix typical Leaflet icon issue in Next.js
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: '/images/marker-icon-2x.png',
+  iconUrl: '/images/marker-icon.png',
+  shadowUrl: '/images/marker-shadow.png',
+});
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+interface MapProps {
+  onLocationSelect: (lat: number, lng: number) => void;
+  selectedLocation: { lat: number; lng: number } | null;
+}
 
-  if (!mounted) return <div className="w-full h-full bg-gray-800 flex items-center justify-center">Loading Map...</div>;
+function LocationMarker({ onSelect, position }: { onSelect: any, position: any }) {
+  useMapEvents({
+    click(e) {
+      onSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
 
+  return position === null ? null : (
+    <Marker position={position}>
+      <Popup>Selected Region for Analysis</Popup>
+    </Marker>
+  );
+}
+
+export default function InteractiveMap({ onLocationSelect, selectedLocation }: MapProps) {
   return (
-    <div className="w-full h-full bg-gray-800 relative">
-      {/* 
-        In reality, you would use React-Leaflet here:
-        <MapContainer center={[-1.2921, 36.8219]} zoom={6} scrollWheelZoom={true} className="w-full h-full">
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Marker position={[-1.2921, 36.8219]} />
-        </MapContainer>
+    <MapContainer
+      center={[-1.2921, 36.8219]} // Start somewhere in Kenya (impact zone example)
+      zoom={5}
+      className="w-full h-full rounded-2xl shadow-inner border border-gray-200"
+      style={{ height: '100%', minHeight: '600px', width: '100%', zIndex: 0 }}
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+      />
+      
+      {/* Optional: You can swap default OSM for ESRI Satellite map easily:
+      <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
       */}
-      <div className="absolute inset-0 flex items-center justify-center p-20 text-center text-gray-500">
-        <div className="border border-dashed border-gray-600 rounded-2xl w-full h-full flex flex-col items-center justify-center gap-4 bg-gray-800/50">
-           <svg className="w-16 h-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-           </svg>
-           <p>Interactive Map Component (Leaflet/Mapbox)</p>
-        </div>
-      </div>
-    </div>
+      
+      <LocationMarker onSelect={onLocationSelect} position={selectedLocation} />
+    </MapContainer>
   );
 }

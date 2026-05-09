@@ -1,18 +1,14 @@
-def predict_risk(features: dict) -> tuple[float, str]:
+def predict_risk(features: dict, crop_type: str = "Maize") -> tuple[float, str]:
     """
     A lightweight deterministic ML model proxy for the hackathon.
-    In a real scenario, this would load a pre-trained scikit-learn model 
-    (e.g., joblib.load('random_forest.pkl')) and run `model.predict(X)`.
-    
-    For the sake of a reliable hackathon demo without needing to bundle large
-    pkl files or deal with imbalanced synthetic datasets, we use a 
-    heuristic based on the same features a linear regression would weight.
+    In a real scenario, this would load a pre-trained scikit-learn model.
     """
     
     ndvi_current = features.get("ndvi_current", 0.5)
     ndvi_historical = features.get("ndvi_historical", 0.5)
     rainfall = features.get("rainfall_30d_mm", 50)
     temp = features.get("temp_avg_c", 25)
+    soil_type = features.get("soil_type", "Loam")
     
     # Feature Engineering (Delta)
     ndvi_delta = ndvi_current - ndvi_historical
@@ -20,23 +16,40 @@ def predict_risk(features: dict) -> tuple[float, str]:
     # Base risk score (0-100)
     score = 10.0
     
+    # Crop-specific rules
+    crop_lower = crop_type.lower()
+    multiplier = 1.0
+    if crop_lower == "rice":
+        multiplier = 1.2
+    elif crop_lower == "sorghum":
+        multiplier = 0.8
+    elif crop_lower == "wheat":
+        multiplier = 0.9
+
+    # Soil-specific modifiers (e.g. Sandy soil drains water too fast)
+    soil_multiplier = 1.0
+    if soil_type == "Sandy":
+        soil_multiplier = 1.3 # Severe penalty if dry
+    elif soil_type == "Clay":
+        soil_multiplier = 0.8 # Retains moisture, less drought penalty
+
     # 1. Vegetation Drop Penalty
     if ndvi_delta < -0.1:
-        score += 40
+        score += (40 * multiplier)
     elif ndvi_delta < 0:
-        score += 15
+        score += (15 * multiplier)
         
     # 2. Rainfall Penalty (Assume < 20mm in 30 days is bad)
     if rainfall < 10:
-        score += 35
+        score += (35 * multiplier * soil_multiplier)
     elif rainfall < 25:
-        score += 20
+        score += (20 * multiplier * soil_multiplier)
         
     # 3. Heat Penalty
     if temp > 32:
-        score += 20
+        score += (20 * multiplier)
     elif temp > 28:
-        score += 10
+        score += (10 * multiplier)
         
     # Cap score
     score = min(max(score, 0), 100)
@@ -51,4 +64,4 @@ def predict_risk(features: dict) -> tuple[float, str]:
     else:
         level = "Low"
         
-    return round(score, 1), level
+    return score, level
