@@ -1,20 +1,43 @@
+# Dependencies
 node_modules/
-.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
 dist/
 build/
-coverage/
+
+# Environment & secrets
 .env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
 .DS_Store
+*.swp
+*.swo
+
+# Logs & temp
 *.log
 *.tmp
 *.bak
-.idea/
 
+# Frontend (Next.js)
 .next/
-frontend/node_modules/
+out/
+coverage/
 
-# Local Open-Meteo cache (see backend/app/services/weather_cache.py)
-backend/data/weather_cache/
-backend/data/soil_cache/
-backend/data/vegetation_cache/
-backend/data/terrain_cache/
+# Backend: local API caches (Open-Meteo, SoilGrids, MODIS, terrain tiles — see backend/app/services/*_cache.py)
+backend/data/*_cache/
