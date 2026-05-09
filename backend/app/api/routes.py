@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import sys
 import os
 import random
@@ -10,7 +10,13 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from ml.risk_model import predict_risk
-from app.services.watsonx import analyze_risk_with_watson
+from ml.suitability import summarize_forecast_stress, compute_crop_outlook
+from app.services.crop_catalog import get_profiles_as_dicts
+from app.services.watsonx import (
+    analyze_crop_portfolio_with_watson,
+    analyze_regional_crop_fit_insight_watson,
+    fallback_regional_crop_insight,
+)
 
 router = APIRouter()
 
@@ -18,7 +24,62 @@ class RegionRequest(BaseModel):
     lat: float
     lon: float
     region_name: str = "Unknown Region"
-    crop_type: str = "Maize"
+    crop_type: str | None = None
+
+
+class CropOutlookRow(BaseModel):
+    id: str
+    label: str
+    suitability_score: float
+    band: str
+    stress: dict[str, bool] = Field(default_factory=dict)
+    deterministic_notes: str
+    forecast_heat_days: int = 0
+    forecast_max_dry_streak: int = 0
+    risks_text: str
+    mitigate_text: str
+
+
+class CropGuidanceItem(BaseModel):
+    id: str
+    label: str
+    risks_text: str
+    mitigate_text: str
+
+
+class AnalyzeResponse(BaseModel):
+    region: str
+    coordinates: dict[str, float]
+    crop_type: str
+    features: dict
+    risk_analysis: dict
+    ai_insight: str
+    forecast: list[dict]
+    forecast_stress_summary: dict
+    crop_outlook: list[CropOutlookRow]
+    crop_guidance: list[CropGuidanceItem]
+
+
+def _portfolio_subset_for_llm(crop_outlook: list[dict]) -> list[dict]:
+    """Top 3 + lowest-ranked crop by suitability (token-safe); unique indices."""
+    n = len(crop_outlook)
+    if n == 0:
+        return []
+    idx: set[int] = set()
+    for i in range(min(3, n)):
+        idx.add(i)
+    if n > 1:
+        idx.add(n - 1)
+    return [crop_outlook[i] for i in sorted(idx)]
+
+
+def _merge_portfolio_guidance(crop_outlook: list[dict], guidance: dict[str, tuple[str, str]]) -> None:
+    for row in crop_outlook:
+        label = row["label"]
+        if label in guidance:
+            risks, mit = guidance[label]
+            row["risks_text"] = risks
+            row["mitigate_text"] = mit
 
 @router.post("/analyze")
 async def analyze_region(req: RegionRequest):
@@ -67,16 +128,7 @@ async def analyze_region(req: RegionRequest):
             "temp_avg_c": round(avg_temp, 1),
             "soil_type": soil
         }
-            
-        # Use Watson AI for Primary Evaluation
-        w_score, w_level, w_insight = analyze_risk_with_watson(features, req.crop_type)
-        
-        # Fallback to local deterministic if API fails or parse fails
-        if w_score is None:
-            w_score, w_level = predict_risk(features, req.crop_type)
-            if "Demo Mode" not in w_insight:
-                w_insight = f"IBM Watsonx parsing error. Local Model Analysis: {w_level} Risk."
-        
+
         # Forecast Logic (Use local proxy to avoid hitting Watsonx API 7x times repeatedly)
         forecast = []
         for i in range(1, 8):
@@ -94,17 +146,57 @@ async def analyze_region(req: RegionRequest):
                 "rainfall_mm": round(max(0, day_rain), 1)
             })
 
-        return {
-            "region": req.region_name,
-            "coordinates": {"lat": req.lat, "lon": req.lon},
-            "crop_type": req.crop_type,
-            "features": features,
-            "risk_analysis": {
+        forecast_stress_summary = summarize_forecast_stress(forecast)
+        profiles = get_profiles_as_dicts()
+        crop_outlook = compute_crop_outlook(features, forecast, profiles)
+
+        if req.crop_type:
+            headline_crop = req.crop_type.strip() or None
+        else:
+            headline_crop = None
+        if not headline_crop:
+            headline_crop = (crop_outlook[0]["label"] if crop_outlook else None) or "Maize"
+        w_score, w_level = predict_risk(features, headline_crop)
+
+        regional_insight = analyze_regional_crop_fit_insight_watson(
+            features, forecast_stress_summary, crop_outlook
+        )
+        if regional_insight:
+            w_insight = regional_insight
+        else:
+            w_insight = fallback_regional_crop_insight(crop_outlook)
+
+        llm_crops = _portfolio_subset_for_llm(crop_outlook)
+        portfolio_map = analyze_crop_portfolio_with_watson(
+            features, forecast_stress_summary, llm_crops
+        )
+        _merge_portfolio_guidance(crop_outlook, portfolio_map)
+
+        crop_guidance = [
+            CropGuidanceItem(
+                id=row["id"],
+                label=row["label"],
+                risks_text=row["risks_text"],
+                mitigate_text=row["mitigate_text"],
+            )
+            for row in crop_outlook
+        ]
+
+        payload = AnalyzeResponse(
+            region=req.region_name,
+            coordinates={"lat": req.lat, "lon": req.lon},
+            crop_type=headline_crop,
+            features=features,
+            risk_analysis={
                 "score": round(w_score, 1),
                 "level": w_level
             },
-            "ai_insight": w_insight,
-            "forecast": forecast
-        }
+            ai_insight=w_insight,
+            forecast=forecast,
+            forecast_stress_summary=forecast_stress_summary,
+            crop_outlook=[CropOutlookRow.model_validate(row) for row in crop_outlook],
+            crop_guidance=crop_guidance,
+        )
+        return payload.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
