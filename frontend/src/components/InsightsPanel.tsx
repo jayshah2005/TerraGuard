@@ -249,16 +249,22 @@ export default function InsightsPanel({
                   <span className="font-semibold text-emerald-800">Mitigate: </span>
                   {row.mitigate_text}
                 </p>
-                <div className="mt-3 text-xs text-gray-600 leading-relaxed border-t border-slate-200 pt-2">
-                  <p className="font-semibold text-gray-800 mb-1">Next 7 days vs this plant&apos;s thresholds</p>
-                  <p>
-                    <span className="font-medium text-gray-700">{row.forecast_heat_days}</span> of <span className="font-medium">{fcDays}</span> forecast days have
-                    daily high ≥ <span className="font-medium">{heatThr}°C</span> (this plant&apos;s heat-stress cutoff for the short-range outlook).
+                <div className="mt-3 text-xs text-gray-600 leading-relaxed border-t border-slate-200 pt-2 space-y-2">
+                  <p className="font-semibold text-gray-800">Same forecast window as Analysis — catalog cutoffs for this plant</p>
+                  <p className="text-gray-500">
+                    The numbers below use this plant&apos;s saved heat and rain limits from the catalog. The Analysis tab &quot;Short-range field outlook&quot; summary
+                    instead uses one-size rules for everyone (daily high ≥ 32°C, rain below 2 mm per day).
                   </p>
-                  <p className="mt-1">
-                    Longest run of days with rain below <span className="font-medium">{dryThr} mm</span>/day:{' '}
-                    <span className="font-medium">{row.forecast_max_dry_streak}</span> day(s) (plant-specific &quot;very dry&quot; day threshold).
-                  </p>
+                  <ul className="list-none space-y-1.5 text-gray-700">
+                    <li>
+                      Days with high ≥ <span className="font-medium text-gray-900">{heatThr}°C</span>:{' '}
+                      <span className="font-medium text-gray-900">{row.forecast_heat_days}</span> of {fcDays}
+                    </li>
+                    <li>
+                      Longest stretch of days with rain under <span className="font-medium text-gray-900">{dryThr} mm</span>:{' '}
+                      <span className="font-medium text-gray-900">{row.forecast_max_dry_streak}</span> day(s)
+                    </li>
+                  </ul>
                 </div>
               </div>
             )}
@@ -498,13 +504,6 @@ export default function InsightsPanel({
             <p className="text-xs text-gray-500 py-2 text-center">Enter at least 2 characters to search the catalog.</p>
           )}
 
-          {forecast_stress_summary && (
-            <p className="text-xs text-slate-500 leading-relaxed border-l-2 border-emerald-200 pl-2">
-              Week-wide rain, heat, and dry-run stats match the <span className="font-semibold text-slate-700">Short-range field outlook</span> on the
-              Analysis tab.
-            </p>
-          )}
-
           {hasCropFocus && (
             <div className="overflow-y-auto flex-1 min-h-0 pr-1 -mr-1 border-t border-slate-200 pt-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Comparison details</p>
@@ -514,6 +513,7 @@ export default function InsightsPanel({
         </div>
       )}
       </div>
+      <br />
     </div>
   );
 }
