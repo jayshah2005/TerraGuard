@@ -97,6 +97,7 @@ export default function InsightsPanel({
   const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(true);
   const [catalog, setCatalog] = useState<CropCatalogItem[]>([]);
   const plantSearchWrapRef = useRef<HTMLDivElement>(null);
+  const plantSearchInternalMouseDownRef = useRef(false);
   const prevCropSearchLen = useRef(0);
   const ndviDeltaTriggerRef = useRef<HTMLDivElement>(null);
   const ndviDeltaLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,10 +374,9 @@ export default function InsightsPanel({
                   {row.mitigate_text}
                 </p>
                 <div className="mt-3 text-xs text-gray-600 leading-relaxed border-t border-slate-200 pt-2 space-y-2">
-                  <p className="font-semibold text-gray-800">Same forecast window as Analysis — catalog cutoffs for this plant</p>
+                  <p className="font-semibold text-gray-800">7-Day Weather Threshold Check</p>
                   <p className="text-gray-500">
-                    The numbers below use this plant&apos;s saved heat and rain limits from the catalog. The Analysis tab &quot;Short-range field outlook&quot; summary
-                    instead uses one-size rules for everyone (daily high ≥ 32°C, rain below 2 mm per day).
+                    The numbers below use this plant&apos;s saved heat and rain limits from the catalog.
                   </p>
                   <ul className="list-none space-y-1.5 text-gray-700">
                     <li>
@@ -633,6 +633,12 @@ export default function InsightsPanel({
           <div
             ref={plantSearchWrapRef}
             className={`relative isolate ${showSearchDropdown ? 'z-[10060]' : 'z-20'}`}
+            onMouseDownCapture={() => {
+              plantSearchInternalMouseDownRef.current = true;
+              requestAnimationFrame(() => {
+                plantSearchInternalMouseDownRef.current = false;
+              });
+            }}
           >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
             <input
@@ -643,6 +649,7 @@ export default function InsightsPanel({
                 if (cropSearch.trim().length >= 2) setCatalogDropdownOpen(true);
               }}
               onBlur={() => {
+                if (plantSearchInternalMouseDownRef.current) return;
                 requestAnimationFrame(() => {
                   requestAnimationFrame(() => {
                     const root = plantSearchWrapRef.current;
