@@ -1,49 +1,91 @@
 # Deployment Guide
 
-GrowSpot is designed to be easily deployed to IBM Cloud or any standard VPS/Container service.
+This guide matches the current GrowSpot codebase layout:
 
-## Local Deployment (Docker)
+- Frontend: `frontend/` (Next.js)
+- Backend: `backend/` (FastAPI)
 
-The easiest way to run the entire stack locally is using Docker Compose (Recommended for the hackathon presentation if internet is spotty).
-
-1.  Ensure Docker and Docker Compose are installed.
-2.  Create your `.env` file in the root directory.
-3.  Run:
-    ```bash
-    docker-compose up --build
-    ```
-4.  The frontend will be available at `http://localhost:3000` and the backend at `http://localhost:8000`.
-
-## IBM Cloud Deployment (Code Engine)
-
-For a production-like URL, deploy to IBM Cloud Code Engine (serverless container platform).
+## 1) Local Development Setup
 
 ### Prerequisites
-*   IBM Cloud CLI installed (`ibmcloud`).
-*   Docker installed.
-*   An active IBM Cloud account.
 
-### Steps
-1.  **Login to IBM Cloud**:
-    ```bash
-    ibmcloud login
-    ibmcloud target -g Default
-    ```
+- Node.js 18+
+- Python 3.10+
 
-2.  **Containerize the Backend**:
-    ```bash
-    cd backend
-    docker build -t us.icr.io/my_namespace/growspot-api:latest .
-    docker push us.icr.io/my_namespace/growspot-api:latest
-    ```
+### Environment Variables
 
-3.  **Deploy Backend to Code Engine**:
-    ```bash
-    ibmcloud ce app create --name growspot-api --image us.icr.io/my_namespace/growspot-api:latest --env-from-secret growspot-secrets
-    ```
+Create a root `.env` file with at least:
 
-4.  **Deploy Frontend (Vercel or Code Engine)**:
-    *   *Hackathon tip: Next.js is easiest to deploy on Vercel.*
-    *   Connect your GitHub repo to Vercel.
-    *   Set the `NEXT_PUBLIC_API_URL` environment variable to the IBM Code Engine URL generated in Step 3.
-    *   Deploy.
+```env
+IBM_CLOUD_API_KEY=your_ibm_key
+WATSONX_PROJECT_ID=your_project_id
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+FRONTEND_URL=http://localhost:3000
+```
+
+Optional:
+
+```env
+USDA_NASS_API_KEY=optional_usda_key
+GROWSPOT_LAND_MASK_GEOJSON=/absolute/path/to/ne_10m_land.geojson
+```
+
+### Run Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Backend runs at `http://localhost:8000`.
+
+### Run Frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs at `http://localhost:3000`.
+
+## 2) Backend Container Deployment (IBM Code Engine)
+
+The repository includes `backend/Dockerfile`.
+
+```bash
+cd backend
+docker build -t us.icr.io/<namespace>/growspot-api:latest .
+docker push us.icr.io/<namespace>/growspot-api:latest
+```
+
+Then deploy with Code Engine and set runtime env vars:
+
+```bash
+ibmcloud ce app create \
+  --name growspot-api \
+  --image us.icr.io/<namespace>/growspot-api:latest \
+  --env IBM_CLOUD_API_KEY=<key> \
+  --env WATSONX_PROJECT_ID=<project_id> \
+  --env WATSONX_URL=https://us-south.ml.cloud.ibm.com \
+  --env FRONTEND_URL=<frontend_url>
+```
+
+## 3) Frontend Deployment
+
+Deploy `frontend/` to Vercel (recommended) or another Node host.
+
+Set:
+
+- `NEXT_PUBLIC_BACKEND_URL=https://<backend-domain>`
+
+## 4) Smoke Checks
+
+- Open frontend and click a land location on the map
+- Verify `/api/v1/map-preflight` allows analysis on land
+- Verify `/api/v1/analyze` returns populated `features` and `risk_analysis`
