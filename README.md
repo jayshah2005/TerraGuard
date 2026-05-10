@@ -1,14 +1,14 @@
-# TerraGuard: Crop Failure Early Warning System
+# GrowSpot: Crop Failure Early Warning System
 
-![TerraGuard](https://img.shields.io/badge/TerraGuard-AI_for_Climate-blue) ![IBM watsonx](https://img.shields.io/badge/Powered_by-IBM_watsonx-blue) ![UN SDG 2 & 13](https://img.shields.io/badge/UN_SDG-2_%26_13-green)
+![GrowSpot](https://img.shields.io/badge/GrowSpot-AI_for_Climate-blue) ![IBM watsonx](https://img.shields.io/badge/Powered_by-IBM_watsonx-blue) ![UN SDG 2 & 13](https://img.shields.io/badge/UN_SDG-2_%26_13-green)
 
-TerraGuard is an AI-powered Crop Failure Early Warning System designed for small farms in developing nations. Built for the **IBM x UNSA Hackathon**, it leverages environmental data, machine learning, and IBM watsonx.ai to predict agricultural vulnerability and generate actionable insights.
+GrowSpot is an AI-powered Crop Failure Early Warning System designed for small farms in developing nations. Built for the **IBM x UNSA Hackathon**, it leverages environmental data, machine learning, and IBM watsonx.ai to predict agricultural vulnerability and generate actionable insights.
 
 ## 🌍 The Problem
 Smallholder farmers in developing nations are disproportionately vulnerable to climate change. Unpredictable rainfall and rising temperatures lead to devastating crop failures. Existing systems are often too expensive, too complex, or lack hyper-local insights.
 
 ## 💡 The Solution
-TerraGuard democratizes environmental intelligence. By analyzing satellite imagery, weather data, and temperature trends, it provides an intuitive, map-first dashboard that warns users of impending drought stress and crop failure risks.
+GrowSpot democratizes environmental intelligence. By analyzing satellite imagery, weather data, and temperature trends, it provides an intuitive, map-first dashboard that warns users of impending drought stress and crop failure risks.
 
 ## ⚙️ Architecture Overview
 *   **Frontend**: Next.js, Tailwind CSS, Mapbox GL JS
@@ -29,7 +29,7 @@ For a deep dive, see [SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
 1.  **Clone the repository**:
     ```bash
     git clone <repo-url>
-    cd TerraGuard
+    cd GrowSpot
     ```
 
 2.  **Environment Variables**:
@@ -69,8 +69,8 @@ For a deep dive, see [SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
 *   [Future Roadmap](docs/FUTURE_ROADMAP.md)
 
 ## 🎯 Alignment with UN SDGs
-*   **Goal 2: Zero Hunger**: By predicting crop failure, TerraGuard helps secure food supply chains and aids agricultural resilience.
+*   **Goal 2: Zero Hunger**: By predicting crop failure, GrowSpot helps secure food supply chains and aids agricultural resilience.
 *   **Goal 13: Climate Action**: Provides critical data to mitigate the effects of climate-induced drought.
 
 ## 🤝 IBM Integration
-TerraGuard relies on **IBM watsonx.ai** and its foundational Granite models to translate complex, multi-dimensional environmental data arrays into plain-language, actionable insights that any farmer or local official can understand.
+GrowSpot relies on **IBM watsonx.ai** and its foundational Granite models to translate complex, multi-dimensional environmental data arrays into plain-language, actionable insights that any farmer or local official can understand.

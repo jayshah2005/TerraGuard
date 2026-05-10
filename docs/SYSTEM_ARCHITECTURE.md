@@ -1,6 +1,6 @@
 # System Architecture
 
-TerraGuard is designed as a modular, scalable, yet lightweight application optimized for the IBM x UNSA Hackathon timeframe. It follows a classic client-server architecture with decoupled microservices for AI inference and external data ingestion.
+GrowSpot is designed as a modular, scalable, yet lightweight application optimized for the IBM x UNSA Hackathon timeframe. It follows a classic client-server architecture with decoupled microservices for AI inference and external data ingestion.
 
 ## High-Level Architecture Diagram
 

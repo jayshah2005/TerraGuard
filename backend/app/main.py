@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path="../.env")
 
 app = FastAPI(
-    title="TerraGuard API",
-    description="Backend for the TerraGuard Crop Failure Early Warning System",
+    title="GrowSpot API",
+    description="Backend for the GrowSpot Crop Failure Early Warning System",
     version="1.0.0",
 )
 
@@ -30,4 +30,4 @@ app.include_router(router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
-    return {"message": "TerraGuard API is running. Access /docs for Swagger UI."}
+    return {"message": "GrowSpot API is running. Access /docs for Swagger UI."}

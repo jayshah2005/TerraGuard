@@ -7,8 +7,8 @@
 **Speaker 1:** "Smallholder farmers feed 30% of the world. But right now, climate change is making their livelihoods unpredictable. An unexpected 14-day dry spell can mean a family starves. The data to predict this exists—satellites see it, weather models predict it. But a farmer in a developing nation can't read a raw GeoTIFF or a CSV file. They need answers."
 
 ## 0:45 - 1:30 | The Solution & Live Demo
-*(Screen: Switch to TerraGuard Live App. The dark-mode Mapbox UI is glowing, showing a global view.)*
-**Speaker 1:** "Enter TerraGuard. Our AI-powered Crop Failure Early Warning System. Let's look at a region currently experiencing anomalies."
+*(Screen: Switch to GrowSpot Live App. The dark-mode Mapbox UI is glowing, showing a global view.)*
+**Speaker 1:** "Enter GrowSpot. Our AI-powered Crop Failure Early Warning System. Let's look at a region currently experiencing anomalies."
 *(Action: Click on a pre-seeded polygon on the map, e.g., a region in South America).*
 
 *(Screen: The map zooms in smoothly. Heatmap layers load instantly. The sidebar populates with charts.)*
@@ -26,4 +26,4 @@
 
 ## 3:00 - 3:30 | The Impact (SDGs) & Close
 *(Screen: Back to the App UI).*
-**Speaker 1:** "TerraGuard directly targets UN SDG 2 (Zero Hunger) and SDG 13 (Climate Action). By democratizing climate intelligence, we aren't just predicting crop failure; we are giving communities the time they need to prevent it. Thank you."
+**Speaker 1:** "GrowSpot directly targets UN SDG 2 (Zero Hunger) and SDG 13 (Climate Action). By democratizing climate intelligence, we aren't just predicting crop failure; we are giving communities the time they need to prevent it. Thank you."

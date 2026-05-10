@@ -1,6 +1,6 @@
 # Deployment Guide
 
-TerraGuard is designed to be easily deployed to IBM Cloud or any standard VPS/Container service.
+GrowSpot is designed to be easily deployed to IBM Cloud or any standard VPS/Container service.
 
 ## Local Deployment (Docker)
 
@@ -33,13 +33,13 @@ For a production-like URL, deploy to IBM Cloud Code Engine (serverless container
 2.  **Containerize the Backend**:
     ```bash
     cd backend
-    docker build -t us.icr.io/my_namespace/terraguard-api:latest .
-    docker push us.icr.io/my_namespace/terraguard-api:latest
+    docker build -t us.icr.io/my_namespace/growspot-api:latest .
+    docker push us.icr.io/my_namespace/growspot-api:latest
     ```
 
 3.  **Deploy Backend to Code Engine**:
     ```bash
-    ibmcloud ce app create --name terraguard-api --image us.icr.io/my_namespace/terraguard-api:latest --env-from-secret terraguard-secrets
+    ibmcloud ce app create --name growspot-api --image us.icr.io/my_namespace/growspot-api:latest --env-from-secret growspot-secrets
     ```
 
 4.  **Deploy Frontend (Vercel or Code Engine)**:

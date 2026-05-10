@@ -243,7 +243,7 @@ export default function InsightsPanel({
     const hint = maskErr
       ? 'Fix the deployment land-mask file or try again. We block analysis until we can confirm the pin is on dry land.'
       : reqFail
-        ? 'Ensure the TerraGuard API is running and reachable, then click again.'
+        ? 'Ensure the GrowSpot API is running and reachable, then click again.'
         : 'Choose a spot on dry land—a garden bed, field, or yard—then click again. We skip the analysis pipeline when the pin is not on mapped land (e.g. open ocean).';
     return (
       <div className="flex flex-col h-full min-h-0 w-full">
@@ -263,7 +263,7 @@ export default function InsightsPanel({
         <div className="flex-1 flex flex-col justify-center items-center text-gray-400 text-center p-8">
           <AlertTriangle className="w-16 h-16 mb-4 opacity-50" />
           <h2 className="text-xl font-bold mb-2">No Region Selected</h2>
-          <p>Click anywhere on the map to run the TerraGuard analysis pipeline for that location.</p>
+          <p>Click anywhere on the map to run the GrowSpot analysis pipeline for that location.</p>
         </div>
       </div>
     );

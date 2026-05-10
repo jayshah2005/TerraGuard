@@ -1,5 +1,5 @@
 """
-ISRIC SoilGrids v2 classification → TerraGuard soil buckets (Sandy / Clay / Loam / …).
+ISRIC SoilGrids v2 classification → GrowSpot soil buckets (Sandy / Clay / Loam / …).
 REST base: https://rest.isric.org/soilgrids/v2.0/classification/query
 """
 
@@ -53,7 +53,7 @@ _WRB_TO_LABEL: list[tuple[str, str]] = [
 
 
 def map_wrb_to_soil_type(wrb_name: str) -> str:
-    """Map SoilGrids WRB class name to coarse TerraGuard label."""
+    """Map SoilGrids WRB class name to coarse GrowSpot label."""
     if not wrb_name:
         return "Loam"
     for pattern, label in _WRB_TO_LABEL:

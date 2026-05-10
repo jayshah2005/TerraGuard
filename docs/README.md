@@ -1,7 +1,7 @@
-# TerraGuard: Crop Failure Early Warning System
+# GrowSpot: Crop Failure Early Warning System
 
 ## Overview
-TerraGuard is an AI-powered Crop Failure Early Warning System designed for small farms in developing nations. By combining satellite data, weather metrics, and IBM watsonx.ai, TerraGuard predicts agricultural vulnerability and generates actionable insights to prevent crop failure.
+GrowSpot is an AI-powered Crop Failure Early Warning System designed for small farms in developing nations. By combining satellite data, weather metrics, and IBM watsonx.ai, GrowSpot predicts agricultural vulnerability and generates actionable insights to prevent crop failure.
 
 ## Hackathon Goals
 - **UN SDG Alignment:** Goal 2 (Zero Hunger) & Goal 13 (Climate Action).

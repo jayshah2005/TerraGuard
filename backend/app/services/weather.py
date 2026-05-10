@@ -1,5 +1,5 @@
 """
-Open-Meteo historical (archive) + forecast APIs for TerraGuard.
+Open-Meteo historical (archive) + forecast APIs for GrowSpot.
 """
 
 from __future__ import annotations

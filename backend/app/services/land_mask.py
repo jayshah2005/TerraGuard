@@ -2,7 +2,7 @@
 Global land polygon gate using Natural Earth **50m** land GeoJSON (WGS84).
 
 110m land omits many small islands; 50m restores them for map clicks. For even
-smaller features, set TERRAGUARD_LAND_MASK_GEOJSON to Natural Earth `ne_10m_land.geojson`.
+smaller features, set GROWSPOT_LAND_MASK_GEOJSON to Natural Earth `ne_10m_land.geojson`.
 
 No HTTP on the click path — deterministic point-in-polygon via Shapely STRtree.
 If the GeoJSON fails to load, map_click_preflight fails closed (blocks analysis).
@@ -22,7 +22,7 @@ from shapely.strtree import STRtree
 logger = logging.getLogger(__name__)
 
 # Natural Earth 50m includes far more small islands than 110m (110m generalizes many away).
-# For micro-islands, point TERRAGUARD_LAND_MASK_GEOJSON at ne_10m_land.geojson (~10 MB).
+# For micro-islands, point GROWSPOT_LAND_MASK_GEOJSON at ne_10m_land.geojson (~10 MB).
 _DEFAULT_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "geo" / "ne_50m_land.geojson"
 
 _polygons: list | None = None
@@ -45,7 +45,7 @@ def _load() -> None:
     if _polygons is not None:
         return
 
-    path = os.environ.get("TERRAGUARD_LAND_MASK_GEOJSON")
+    path = os.environ.get("GROWSPOT_LAND_MASK_GEOJSON") or os.environ.get("TERRAGUARD_LAND_MASK_GEOJSON")
     geo_path = Path(path) if path else _DEFAULT_PATH
 
     try:
@@ -118,7 +118,7 @@ def map_click_preflight(lat: float, lon: float) -> dict[str, Any]:
             "reason": "mask_unavailable",
             "message": (
                 "Land boundaries could not be loaded, so we cannot verify this pin is on dry land. "
-                "Ensure backend/data/geo/ne_50m_land.geojson is present or set TERRAGUARD_LAND_MASK_GEOJSON."
+                "Ensure backend/data/geo/ne_50m_land.geojson is present or set GROWSPOT_LAND_MASK_GEOJSON."
             ),
             "detail": mask_load_error(),
         }

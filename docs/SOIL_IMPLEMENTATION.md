@@ -1,7 +1,7 @@
-# TerraGuard Soil Analytics Implementation
+# GrowSpot Soil Analytics Implementation
 
 ## Overview
-TerraGuard deeply factors underlying soil hydrology into agricultural vulnerability. Certain crops behave severely differently during drought or flood patterns depending on the baseline soil substrate holding them. For example, Maize planted in Sandy soil drains water drastically faster, exacerbating short-term drought impacts, whilst Clay soil retains water securely, mitigating minor heatwaves.
+GrowSpot deeply factors underlying soil hydrology into agricultural vulnerability. Certain crops behave severely differently during drought or flood patterns depending on the baseline soil substrate holding them. For example, Maize planted in Sandy soil drains water drastically faster, exacerbating short-term drought impacts, whilst Clay soil retains water securely, mitigating minor heatwaves.
 
 ## Production Data Fetching (ISRIC SoilGrids API)
 During the hackathon scale MVP, the exact GeoJSON lookup boundary fetch has been deterministically seeded/mocked via the `hashlib` python library against coordinates. 

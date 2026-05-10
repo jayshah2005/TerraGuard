@@ -3,10 +3,10 @@
 *This is the template to copy/paste into your Devpost submission.*
 
 ## Inspiration
-Smallholder farmers produce 30% of the world's food, yet they are the most vulnerable to climate change. We saw firsthand how an unexpected dry spell could wipe out a family's income for the year. We realized that while satellite data and AI exist, they are locked behind enterprise paywalls or academic interfaces. We built TerraGuard to democratize climate resilience.
+Smallholder farmers produce 30% of the world's food, yet they are the most vulnerable to climate change. We saw firsthand how an unexpected dry spell could wipe out a family's income for the year. We realized that while satellite data and AI exist, they are locked behind enterprise paywalls or academic interfaces. We built GrowSpot to democratize climate resilience.
 
 ## What it does
-TerraGuard is an AI-powered Crop Failure Early Warning System. A user simply clicks on a farming region on our interactive map. Instantly, our system:
+GrowSpot is an AI-powered Crop Failure Early Warning System. A user simply clicks on a farming region on our interactive map. Instantly, our system:
 1. Ingests 30 days of historical weather data (Open-Meteo) and geospatial vegetation indices (NDVI).
 2. Processes this through our custom Machine Learning Risk Engine to generate a "Crop Stress Probability" score.
 3. Feeds this data into **IBM watsonx.ai (Granite)** to generate a plain-text, actionable insight—explaining *why* the risk is high and *what* to do about it.
@@ -28,7 +28,7 @@ Handling raw geospatial data is incredibly complex. Aligning temporal weather da
 ## What we learned
 We learned the incredible power of IBM's Granite models. Prompting the LLM with an array of raw floats `[0.34, 12, 35]` and getting back a perfectly reasoned, empathetic agricultural recommendation was a lightbulb moment for the team.
 
-## What's next for TerraGuard
+## What's next for GrowSpot
 *   **SMS Integration**: Automatically sending the watsonx.ai generated warnings to farmers via SMS (Twilio).
 *   **Prithvi Integration**: Moving from simulated GeoTIFFs to live Hugging Face inference using the IBM/NASA geospatial foundation model for hyper-local 30m resolution crop mapping.
 *   **Market Launch**: Piloting the system with local agricultural NGOs.

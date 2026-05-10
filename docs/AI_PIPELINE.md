@@ -1,6 +1,6 @@
 # AI & ML Pipeline
 
-TerraGuard uses a hybrid AI approach, combining a lightweight deterministic/statistical machine learning model for risk scoring with IBM watsonx.ai for generative, human-readable insights.
+GrowSpot uses a hybrid AI approach, combining a lightweight deterministic/statistical machine learning model for risk scoring with IBM watsonx.ai for generative, human-readable insights.
 
 This pipeline is specifically designed to be hackathon-feasible while remaining technically credible.
 

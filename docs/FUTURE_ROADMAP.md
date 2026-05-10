@@ -1,6 +1,6 @@
 # Future Roadmap
 
-TerraGuard was built over a hackathon weekend, but it is architected to scale into a real startup product.
+GrowSpot was built over a hackathon weekend, but it is architected to scale into a real startup product.
 
 ## Phase 1: Post-Hackathon MVP (Months 1-3)
 *   **Live Satellite Pipelines**: Transition from simulated/cached demo GeoTIFFs to live Sentinel-2 API ingestion via Sentinel Hub or Google Earth Engine.
@@ -12,5 +12,5 @@ TerraGuard was built over a hackathon weekend, but it is architected to scale in
 *   **Predictive Yield Modeling**: Move beyond "Stress Risk" to predicting actual harvest yield reductions (e.g., "-15% expected yield").
 
 ## Phase 3: Enterprise & B2B (Months 6-12)
-*   **Micro-Insurance API**: Expose our risk scores via an API to crop insurance providers. They can use TerraGuard data to parametrically trigger payouts to farmers the moment a severe drought threshold is crossed, without requiring an in-person assessor.
+*   **Micro-Insurance API**: Expose our risk scores via an API to crop insurance providers. They can use GrowSpot data to parametrically trigger payouts to farmers the moment a severe drought threshold is crossed, without requiring an in-person assessor.
 *   **Supply Chain Dashboards**: Build aggregate dashboards for food suppliers (like coffee or cacao buyers) to monitor the health of their entire supply chain across hundreds of micro-farms.

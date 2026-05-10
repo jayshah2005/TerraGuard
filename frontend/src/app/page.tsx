@@ -179,10 +179,10 @@ export default function Home() {
         <div className="absolute top-4 left-4 z-[1000] flex items-center gap-2 pointer-events-none select-none">
           <div className="flex items-center gap-2 bg-transparent">
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-lg">T</span>
+              <span className="text-white font-bold text-lg">G</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-emerald-950 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
-              TerraGuard
+              GrowSpot
             </h1>
           </div>
         </div>

@@ -2,7 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'TerraGuard',
+  title: 'GrowSpot',
   description: 'AI-powered plant and crop climate outlook for farms and home gardens',
 }
 

@@ -46,7 +46,7 @@ export default function InteractiveMap({ onLocationSelect, selectedLocation }: M
       className="w-full h-full z-0"
       style={{ height: '100%', minHeight: 0, width: '100%', zIndex: 0 }}
     >
-      {/* Bottom-right avoids TerraGuard (top-left) and keeps controls on the map */}
+      {/* Bottom-right avoids GrowSpot (top-left) and keeps controls on the map */}
       <ZoomControl position="bottomright" />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

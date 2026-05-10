@@ -42,7 +42,7 @@ def test_small_island_nauru_allowed():
 def test_mask_unavailable_fail_closed(tmp_path, monkeypatch):
     """Missing GeoJSON → block analysis (fail closed)."""
     bad = tmp_path / "missing.geojson"
-    monkeypatch.setenv("TERRAGUARD_LAND_MASK_GEOJSON", str(bad))
+    monkeypatch.setenv("GROWSPOT_LAND_MASK_GEOJSON", str(bad))
     import importlib
 
     importlib.reload(lm)
@@ -51,5 +51,5 @@ def test_mask_unavailable_fail_closed(tmp_path, monkeypatch):
         assert out["allow_analysis"] is False
         assert out["reason"] == "mask_unavailable"
     finally:
-        monkeypatch.delenv("TERRAGUARD_LAND_MASK_GEOJSON", raising=False)
+        monkeypatch.delenv("GROWSPOT_LAND_MASK_GEOJSON", raising=False)
         importlib.reload(lm)
