@@ -519,6 +519,9 @@ video {
 .invisible {
   visibility: hidden;
 }
+.fixed {
+  position: fixed;
+}
 .absolute {
   position: absolute;
 }
@@ -587,6 +590,21 @@ video {
 }
 .z-\[70\] {
   z-index: 70;
+}
+.z-\[10050\] {
+  z-index: 10050;
+}
+.z-\[10060\] {
+  z-index: 10060;
+}
+.z-\[10070\] {
+  z-index: 10070;
+}
+.z-\[10080\] {
+  z-index: 10080;
+}
+.z-\[10090\] {
+  z-index: 10090;
 }
 .col-span-2 {
   grid-column: span 2 / span 2;
@@ -857,6 +875,9 @@ video {
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
+}
+.resize {
+  resize: both;
 }
 .list-none {
   list-style-type: none;

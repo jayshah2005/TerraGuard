@@ -16,11 +16,9 @@ function regionLabel(lat: number, lng: number) {
 }
 
 function upsertCropRow(prev: CropOutlookRow[], incoming: CropOutlookRow): CropOutlookRow[] {
-  const i = prev.findIndex((r) => r.id.toLowerCase() === incoming.id.toLowerCase());
-  if (i === -1) return [...prev, incoming];
-  const next = [...prev];
-  next[i] = incoming;
-  return next;
+  const incomingNorm = incoming.id.toLowerCase();
+  const withoutIncoming = prev.filter((r) => r.id.toLowerCase() !== incomingNorm);
+  return [incoming, ...withoutIncoming];
 }
 
 export default function Home() {

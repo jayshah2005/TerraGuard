@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Leaf,
   Droplets,
@@ -93,12 +94,94 @@ export default function InsightsPanel({
   const [tab, setTab] = useState<SidebarTab>('analysis');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cropSearch, setCropSearch] = useState('');
+  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(true);
   const [catalog, setCatalog] = useState<CropCatalogItem[]>([]);
+  const plantSearchWrapRef = useRef<HTMLDivElement>(null);
+  const prevCropSearchLen = useRef(0);
+  const ndviDeltaTriggerRef = useRef<HTMLDivElement>(null);
+  const ndviDeltaLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ndviDeltaTipOpen, setNdviDeltaTipOpen] = useState(false);
+  const [ndviDeltaTipPos, setNdviDeltaTipPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const cancelNdviDeltaLeave = useCallback(() => {
+    if (ndviDeltaLeaveTimerRef.current) {
+      clearTimeout(ndviDeltaLeaveTimerRef.current);
+      ndviDeltaLeaveTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleNdviDeltaLeave = useCallback(() => {
+    cancelNdviDeltaLeave();
+    ndviDeltaLeaveTimerRef.current = setTimeout(() => {
+      setNdviDeltaTipOpen(false);
+      ndviDeltaLeaveTimerRef.current = null;
+    }, 140);
+  }, [cancelNdviDeltaLeave]);
+
+  const layoutNdviDeltaTip = useCallback(() => {
+    const el = ndviDeltaTriggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const panelW = Math.min(window.innerWidth - 32, 22 * 16);
+    let left = r.right - panelW;
+    left = Math.max(16, Math.min(left, window.innerWidth - panelW - 16));
+    setNdviDeltaTipPos({ top: r.bottom + 8, left, width: panelW });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!ndviDeltaTipOpen) {
+      setNdviDeltaTipPos(null);
+      return;
+    }
+    layoutNdviDeltaTip();
+  }, [ndviDeltaTipOpen, layoutNdviDeltaTip]);
+
+  useEffect(() => {
+    if (!ndviDeltaTipOpen) return;
+    layoutNdviDeltaTip();
+    window.addEventListener('resize', layoutNdviDeltaTip);
+    window.addEventListener('scroll', layoutNdviDeltaTip, true);
+    return () => {
+      window.removeEventListener('resize', layoutNdviDeltaTip);
+      window.removeEventListener('scroll', layoutNdviDeltaTip, true);
+    };
+  }, [ndviDeltaTipOpen, layoutNdviDeltaTip]);
+
+  useEffect(() => () => cancelNdviDeltaLeave(), [cancelNdviDeltaLeave]);
 
   useEffect(() => {
     setExpandedId(null);
     setCropSearch('');
+    prevCropSearchLen.current = 0;
+    setCatalogDropdownOpen(true);
+    setNdviDeltaTipOpen(false);
   }, [data?.region]);
+
+  useEffect(() => {
+    if (tab !== 'analysis') setNdviDeltaTipOpen(false);
+  }, [tab]);
+
+  useEffect(() => {
+    const len = cropSearch.trim().length;
+    if (len >= 2 && prevCropSearchLen.current < 2) {
+      setCatalogDropdownOpen(true);
+    }
+    prevCropSearchLen.current = len;
+  }, [cropSearch]);
+
+  const showSearchDropdown = cropSearch.trim().length >= 2 && catalogDropdownOpen;
+
+  useEffect(() => {
+    if (!showSearchDropdown) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const root = plantSearchWrapRef.current;
+      if (root && !root.contains(e.target as Node)) {
+        setCatalogDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [showSearchDropdown]);
 
   useEffect(() => {
     if (!data) return;
@@ -314,8 +397,6 @@ export default function InsightsPanel({
     </div>
   );
 
-  const showSearchResults = cropSearch.trim().length >= 2;
-
   return (
     <div className="flex flex-col h-full min-h-0 w-full text-gray-900">
       <div className="shrink-0 px-6 pt-5 pb-3 border-b border-slate-100 bg-white">
@@ -350,7 +431,7 @@ export default function InsightsPanel({
               <div className="relative group flex items-center gap-1 cursor-help">
                 <span className="text-sm uppercase tracking-wider font-semibold opacity-90">Risk Score</span>
                 <Info className="w-4 h-4 opacity-70" />
-                <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
+                <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-[10050]">
                   {hasCropFocus
                     ? `Heuristic failure risk for ${crop_type} (most recently loaded plant) using the local rules engine.`
                     : 'Placeholder risk using Maize as a baseline until you add a plant under Plant outlook (then this updates to the latest plant you select).'}
@@ -391,7 +472,7 @@ export default function InsightsPanel({
                   <span className="text-xs uppercase font-bold">Soil Substrate</span>
                 </div>
                 <Info className="w-4 h-4" />
-                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
+                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-[10050]">
                   Soil class from ISRIC SoilGrids (WRB) when available, mapped to catalog buckets (see “Signals & data sources”). Sandy soils increase drought
                   sensitivity; Clay retains moisture but raises waterlogging risk.
                 </div>
@@ -419,7 +500,7 @@ export default function InsightsPanel({
                   <span className="text-xs uppercase font-bold">Rainfall</span>
                 </div>
                 <Info className="w-4 h-4" />
-                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
+                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-[10050]">
                   Displays today&apos;s local rainfall, followed by the rolling 30-day cumulative history.
                 </div>
               </div>
@@ -436,7 +517,7 @@ export default function InsightsPanel({
                   <span className="text-xs uppercase font-bold">Vegetation Health (NDVI)</span>
                 </div>
                 <Info className="w-4 h-4 shrink-0" aria-hidden />
-                <div className="absolute top-full left-0 right-0 mt-2 hidden group-hover:block z-50 max-h-[min(70vh,320px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl sm:left-auto sm:right-0 sm:max-w-md">
+                <div className="absolute top-full left-0 right-0 mt-2 hidden group-hover:block z-[10050] max-h-[min(70vh,320px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl sm:left-auto sm:right-0 sm:max-w-md">
                   <p className="font-semibold text-emerald-200">What is NDVI?</p>
                   <p className="mt-1 text-gray-100">
                     NDVI (Normalized Difference Vegetation Index) measures greenness from satellite imagery—roughly how much healthy vegetation covers the
@@ -454,12 +535,6 @@ export default function InsightsPanel({
                       <span className="font-medium text-white">Above ~0.5</span> — dense green canopy (healthy crops or forest when seasonal timing aligns).
                     </li>
                   </ul>
-                  <p className="mt-2 border-t border-gray-600 pt-2 text-gray-200">
-                    <span className="font-semibold text-emerald-200">Current vs historical</span> — TerraGuard uses MODIS 16-day composites:{' '}
-                    <span className="font-medium text-white">Current</span> is the recent snapshot;{' '}
-                    <span className="font-medium text-white">Historical</span> is the composite closest to the <em>same calendar period last year</em> so
-                    you compare similar seasons.
-                  </p>
                 </div>
               </div>
 
@@ -476,42 +551,51 @@ export default function InsightsPanel({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200/90 bg-white/70 px-3 py-2">
-                <div className="relative group/delta flex items-center gap-1.5 min-w-0">
+              <div
+                ref={ndviDeltaTriggerRef}
+                className="relative flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200/90 bg-white/70 px-3 py-2 cursor-help"
+                onMouseEnter={() => {
+                  cancelNdviDeltaLeave();
+                  setNdviDeltaTipOpen(true);
+                }}
+                onMouseLeave={scheduleNdviDeltaLeave}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-900">Δ NDVI</span>
                   <span className="text-[10px] font-normal normal-case text-emerald-800/90">(year-over-year)</span>
                   <Info className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
-                  <div className="absolute bottom-full right-0 mb-2 hidden w-[min(100vw-2rem,22rem)] group-hover/delta:block z-50 max-h-[min(70vh,280px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl">
-                    <p className="font-semibold text-emerald-200">What is Δ NDVI?</p>
-                    <p className="mt-1 text-gray-100">
-                      Year-over-year change: <span className="font-medium text-white">current NDVI minus historical NDVI</span> (same seasonal window,
-                      different years). It is <span className="font-medium text-white">not</span> a crop suitability score—it only compares satellite greenness
-                      between two periods.
-                    </p>
-                    <p className="mt-2 font-medium text-white">How to read it</p>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-gray-200">
-                      <li>
-                        <span className="text-white">Positive</span> — canopy looks greener than last year at this time (recovery, better moisture,
-                        growth stage, or land-use change).
-                      </li>
-                      <li>
-                        <span className="text-white">Negative</span> — less green than last year (drought stress, senescence, harvest, bare soil, clouds,
-                        or fire).
-                      </li>
-                      <li>
-                        <span className="text-white">Near zero</span> — similar seasonal greenness to last year.
-                      </li>
-                    </ul>
-                    <p className="mt-2 border-t border-gray-600 pt-2 text-gray-300">
-                      Use Plant outlook and weather/soil context before drawing field decisions; NDVI is one layer and can mislead on small plots, mixed
-                      pixels, or during clouds.
-                    </p>
-                  </div>
                 </div>
                 <span className={`text-lg font-bold tabular-nums ${ndviDeltaTone(features.ndvi_current - features.ndvi_historical)}`}>
                   {formatNdviDelta(features.ndvi_current - features.ndvi_historical)}
                 </span>
               </div>
+              {ndviDeltaTipOpen &&
+                ndviDeltaTipPos &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                  <div
+                    id="ndvi-delta-tooltip"
+                    role="tooltip"
+                    className="max-h-[min(70vh,280px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl"
+                    style={{
+                      position: 'fixed',
+                      top: ndviDeltaTipPos.top,
+                      left: ndviDeltaTipPos.left,
+                      width: ndviDeltaTipPos.width,
+                      zIndex: 10120,
+                    }}
+                    onMouseEnter={cancelNdviDeltaLeave}
+                    onMouseLeave={scheduleNdviDeltaLeave}
+                  >
+                    <p className="font-semibold text-emerald-200">What is Δ NDVI?</p>
+                    <p className="mt-1 text-gray-100">
+                      <span className="font-medium text-white">Current NDVI minus historical NDVI</span> for the same seasonal window last year. This tracks
+                      greenness change only, not crop suitability.
+                    </p>               
+                    <p className="mt-2 border-t border-gray-600 pt-2 text-gray-300">Use with weather, soil, and Plant outlook context.</p>
+                  </div>,
+                  document.body
+                )}
             </div>
           </div>
           
@@ -524,7 +608,7 @@ export default function InsightsPanel({
 
       {tab === 'outlook' && (
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/80 shadow-sm flex flex-col gap-3 flex-1 min-h-0">
-          <div className="flex items-center gap-2">
+          <div className="relative z-[10080] flex items-center gap-2">
             <Sprout className="w-5 h-5 text-emerald-600 shrink-0" />
             <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Plant outlook</h3>
             <div className="group relative ml-auto shrink-0">
@@ -539,30 +623,52 @@ export default function InsightsPanel({
               <div
                 id="plant-outlook-help-popover"
                 role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-[60] mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-slate-700/80 bg-gray-900 px-3 py-2.5 text-left text-xs leading-relaxed text-white shadow-xl opacity-0 invisible transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                className="pointer-events-none absolute right-0 top-full z-[10090] mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-slate-700/80 bg-gray-900 px-3 py-2.5 text-left text-xs leading-relaxed text-white shadow-xl opacity-0 invisible transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
               >
                 {PLANT_OUTLOOK_HELP}
               </div>
             </div>
           </div>
 
-          <div className={`relative isolate ${showSearchResults ? 'z-[60]' : 'z-20'}`}>
+          <div
+            ref={plantSearchWrapRef}
+            className={`relative isolate ${showSearchDropdown ? 'z-[10060]' : 'z-20'}`}
+          >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
             <input
               type="search"
               value={cropSearch}
               onChange={(e) => setCropSearch(e.target.value)}
+              onFocus={() => {
+                if (cropSearch.trim().length >= 2) setCatalogDropdownOpen(true);
+              }}
+              onBlur={() => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    const root = plantSearchWrapRef.current;
+                    if (root && !root.contains(document.activeElement)) {
+                      setCatalogDropdownOpen(false);
+                    }
+                  });
+                });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setCatalogDropdownOpen(false);
+                  e.preventDefault();
+                }
+              }}
               placeholder="Crop · search catalog…"
               className="relative z-10 w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
               aria-label="Search plant catalog"
-              aria-expanded={showSearchResults}
-              aria-controls={showSearchResults ? 'plant-catalog-search-results' : undefined}
+              aria-expanded={showSearchDropdown}
+              aria-controls={showSearchDropdown ? 'plant-catalog-search-results' : undefined}
               autoComplete="off"
             />
-            {showSearchResults && (
+            {showSearchDropdown && (
               <ul
                 id="plant-catalog-search-results"
-                className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-[min(36vh,320px)] overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-xl ring-1 ring-black/10"
+                className="absolute left-0 right-0 top-full z-[10070] mt-1 max-h-[min(36vh,320px)] overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-xl ring-1 ring-black/10"
               >
                 {filteredCatalog.length === 0 && <li className="text-sm text-gray-500 px-2 py-3 text-center">No matching plants.</li>}
                 {filteredCatalog.map((c) => {
@@ -617,7 +723,7 @@ export default function InsightsPanel({
             </div>
           )}
 
-          {!showSearchResults && (
+          {cropSearch.trim().length < 2 && (
             <p className="text-xs text-gray-500 py-2 text-center">Enter at least 2 characters to search the catalog.</p>
           )}
 
