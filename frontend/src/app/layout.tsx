@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'TerraGuard',
-  description: 'AI-powered Crop Failure Early Warning System',
+  description: 'AI-powered plant and crop climate outlook for farms and home gardens',
 }
 
 export default function RootLayout({

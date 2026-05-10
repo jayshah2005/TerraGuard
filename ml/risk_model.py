@@ -3,7 +3,6 @@ def predict_risk(features: dict, crop_type: str = "Maize") -> tuple[float, str]:
     A lightweight deterministic ML model proxy for the hackathon.
     In a real scenario, this would load a pre-trained scikit-learn model.
     """
-    
     ndvi_current = features.get("ndvi_current", 0.5)
     ndvi_historical = features.get("ndvi_historical", 0.5)
     rainfall = features.get("rainfall_30d_mm", 50)
@@ -55,7 +54,7 @@ def predict_risk(features: dict, crop_type: str = "Maize") -> tuple[float, str]:
         score += (20 * multiplier)
     elif temp > 28:
         score += (10 * multiplier)
-        
+
     # Cap score
     score = min(max(score, 0), 100)
     

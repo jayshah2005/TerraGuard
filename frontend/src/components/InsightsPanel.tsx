@@ -46,12 +46,24 @@ interface Props {
   data: AnalysisData | null;
   stackedCropOutlook: CropOutlookRow[];
   loading: boolean;
-  /** When set, a crop outlook request is in flight for this catalog id */
+  /** When set, a plant outlook request is in flight for this catalog id */
   loadingCropId: string | null;
   onCropSelectionChange: (cropId: string, selected: boolean) => void | Promise<void>;
+  /** Map preflight blocked analysis (off mapped land or mask error); full pipeline was not run */
+  locationPreflightBlock?: { message: string; reason?: string } | null;
 }
 
-export default function InsightsPanel({ data, stackedCropOutlook, loading, loadingCropId, onCropSelectionChange }: Props) {
+const PLANT_OUTLOOK_HELP =
+  'Search the catalog for vegetables, herbs, flowers, or field crops. Tick plants to load suitability for home gardens or farms. Untick to remove. Several plants can be compared at once. Scores use your regional signals and short-range outlook on the Analysis tab.';
+
+export default function InsightsPanel({
+  data,
+  stackedCropOutlook,
+  loading,
+  loadingCropId,
+  onCropSelectionChange,
+  locationPreflightBlock = null,
+}: Props) {
   const [tab, setTab] = useState<SidebarTab>('analysis');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cropSearch, setCropSearch] = useState('');
@@ -68,7 +80,7 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
     fetch(`${backendUrl}/api/v1/crops`)
       .then((r) => {
-        if (!r.ok) throw new Error('Failed to load crop catalog');
+        if (!r.ok) throw new Error('Failed to load plant catalog');
         return r.json();
       })
       .then((rows: CropCatalogItem[]) => {
@@ -108,7 +120,28 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
       <div className="flex flex-col h-full min-h-0 w-full">
         <div className="flex-1 flex flex-col justify-center items-center text-gray-500 space-y-4 p-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
-          <p>Running AI Analysis Pipeline...</p>
+          <p>Checking location and running analysis…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (locationPreflightBlock?.message) {
+    const maskErr = locationPreflightBlock.reason === 'mask_unavailable';
+    const reqFail = locationPreflightBlock.reason === 'request_failed';
+    const title = maskErr ? 'Cannot verify land' : reqFail ? 'Land check failed' : 'Not on mapped land';
+    const hint = maskErr
+      ? 'Fix the deployment land-mask file or try again. We block analysis until we can confirm the pin is on dry land.'
+      : reqFail
+        ? 'Ensure the TerraGuard API is running and reachable, then click again.'
+        : 'Choose a spot on dry land—a garden bed, field, or yard—then click again. We skip the analysis pipeline when the pin is not on mapped land (e.g. open ocean).';
+    return (
+      <div className="flex flex-col h-full min-h-0 w-full">
+        <div className="flex-1 flex flex-col justify-center items-center text-center p-8 px-6">
+          <Droplets className="w-16 h-16 mb-4 text-sky-500 opacity-90" aria-hidden />
+          <h2 className="text-xl font-bold text-slate-800 mb-2">{title}</h2>
+          <p className="text-slate-600 leading-relaxed max-w-sm">{locationPreflightBlock.message}</p>
+          <p className="text-sm text-slate-500 mt-4">{hint}</p>
         </div>
       </div>
     );
@@ -217,14 +250,14 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
                   {row.mitigate_text}
                 </p>
                 <div className="mt-3 text-xs text-gray-600 leading-relaxed border-t border-slate-200 pt-2">
-                  <p className="font-semibold text-gray-800 mb-1">Next 7 days vs this crop&apos;s thresholds</p>
+                  <p className="font-semibold text-gray-800 mb-1">Next 7 days vs this plant&apos;s thresholds</p>
                   <p>
                     <span className="font-medium text-gray-700">{row.forecast_heat_days}</span> of <span className="font-medium">{fcDays}</span> forecast days have
-                    daily high ≥ <span className="font-medium">{heatThr}°C</span> (this crop&apos;s heat-stress cutoff for the short-range outlook).
+                    daily high ≥ <span className="font-medium">{heatThr}°C</span> (this plant&apos;s heat-stress cutoff for the short-range outlook).
                   </p>
                   <p className="mt-1">
                     Longest run of days with rain below <span className="font-medium">{dryThr} mm</span>/day:{' '}
-                    <span className="font-medium">{row.forecast_max_dry_streak}</span> day(s) (crop-specific &quot;very dry&quot; day threshold).
+                    <span className="font-medium">{row.forecast_max_dry_streak}</span> day(s) (plant-specific &quot;very dry&quot; day threshold).
                   </p>
                 </div>
               </div>
@@ -258,12 +291,12 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
               tab === 'outlook' ? 'bg-white text-emerald-800 shadow-sm' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Crop outlook
+            Plant outlook
           </button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-0 flex flex-col gap-4">
         {tab === 'analysis' && (
           <>
           <div className={`p-6 rounded-lg text-white relative ${riskColorBg}`}>
@@ -273,19 +306,32 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
                 <Info className="w-4 h-4 opacity-70" />
                 <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
                   {hasCropFocus
-                    ? `Heuristic failure risk for ${crop_type} (most recently loaded crop) using the local rules engine.`
-                    : 'Placeholder risk using Maize as a baseline until you load a crop under Crop outlook (then this updates to the latest crop you add).'}
+                    ? `Heuristic failure risk for ${crop_type} (most recently loaded plant) using the local rules engine.`
+                    : 'Placeholder risk using Maize as a baseline until you add a plant under Plant outlook (then this updates to the latest plant you select).'}
                 </div>
               </div>
             </div>
             <p className="text-xs opacity-90 mt-1 font-medium">
-              {hasCropFocus ? `Latest crop loaded: ${crop_type}` : `Baseline crop: ${crop_type} (load a crop for a tailored score)`}
+              {hasCropFocus ? `Latest plant loaded: ${crop_type}` : `Baseline: ${crop_type} (Change it using Plant outlook)`}
             </p>
             <div className="flex items-end justify-between mt-2">
               <span className="text-4xl font-extrabold">{risk_analysis.score.toFixed(1)}%</span>
               <span className="text-xl font-medium">{risk_analysis.level}</span>
             </div>
           </div>
+
+          <div>
+            <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 text-blue-900 text-sm leading-relaxed shadow-inner">
+              <h3 className="font-semibold text-gray-800">Regional plant fit: </h3>
+              {ai_insight ?? '—'}
+            </div>
+          </div>
+
+
+          {forecast && forecast.length > 0 && (
+            <ShortRangeFieldOutlook forecast={forecast} summary={forecast_stress_summary} />
+          )}
+
 
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-amber-50 p-4 rounded-lg flex flex-col col-span-2">
@@ -346,7 +392,7 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
                   <br />
                   &lt; 0.2: Extreme stress/Barren.
                   <br />
-                  &gt; 0.5: Healthy dense crops.
+                  &gt; 0.5: Healthy dense vegetation (including productive gardens).
                 </div>
               </div>
               <div className="flex justify-between items-center text-emerald-900 mt-1">
@@ -355,22 +401,11 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
               </div>
             </div>
           </div>
-
+          
           <RegionalSignalsAudit features={features} weatherSource={weather_source} coordinates={coordinates} />
 
-          {forecast && forecast.length > 0 && (
-            <ShortRangeFieldOutlook forecast={forecast} summary={forecast_stress_summary} />
-          )}
+          <br />
 
-          <div>
-            <div className="flex items-center mb-3">
-              <div className="bg-blue-600 px-3 py-1 rounded-full text-xs font-bold text-white tracking-wide">IBM watsonx.ai</div>
-              <h3 className="ml-3 font-semibold text-gray-800">Regional crop fit</h3>
-            </div>
-            <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 text-blue-900 text-sm leading-relaxed shadow-inner">
-              {ai_insight ?? '—'}
-            </div>
-          </div>
         </>
       )}
 
@@ -378,31 +413,76 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/80 shadow-sm flex flex-col gap-3 flex-1 min-h-0">
           <div className="flex items-center gap-2">
             <Sprout className="w-5 h-5 text-emerald-600 shrink-0" />
-            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Crop outlook</h3>
-            <div className="relative group ml-auto cursor-help">
-              <Info className="w-4 h-4 text-gray-400" />
-              <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
-                Search the catalog and tick crops to load suitability for this site. Untick to remove. Several crops can be selected at once.
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Plant outlook</h3>
+            <div className="group relative ml-auto shrink-0">
+              <button
+                type="button"
+                className="rounded-full p-1 text-gray-400 hover:text-gray-700 hover:bg-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2"
+                aria-label="How plant outlook works"
+                aria-describedby="plant-outlook-help-popover"
+              >
+                <Info className="w-4 h-4" aria-hidden />
+              </button>
+              <div
+                id="plant-outlook-help-popover"
+                role="tooltip"
+                className="pointer-events-none absolute right-0 top-full z-[60] mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-slate-700/80 bg-gray-900 px-3 py-2.5 text-left text-xs leading-relaxed text-white shadow-xl opacity-0 invisible transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              >
+                {PLANT_OUTLOOK_HELP}
               </div>
             </div>
           </div>
 
-          <p className="text-sm text-gray-600">
-            {hasCropFocus
-              ? `Comparing ${stackedCropOutlook.length} crop(s). Search and toggle crops below — checked rows stay in your comparison.`
-              : `Type at least two letters to search. Tick crops to add them; untick to remove.`}
-          </p>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <div className="relative z-20 isolate">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
             <input
               type="search"
               value={cropSearch}
               onChange={(e) => setCropSearch(e.target.value)}
-              placeholder="Search crops (e.g. wheat, tomato)…"
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-              aria-label="Search crops"
+              placeholder="Search plants (e.g. tomato, basil, marigold, wheat)…"
+              className="relative z-10 w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              aria-label="Search plant catalog"
+              aria-expanded={showSearchResults}
+              aria-controls={showSearchResults ? 'plant-catalog-search-results' : undefined}
+              autoComplete="off"
             />
+            {showSearchResults && (
+              <ul
+                id="plant-catalog-search-results"
+                className="absolute left-0 right-0 top-full z-30 mt-1 max-h-[min(36vh,320px)] overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg ring-1 ring-black/5"
+              >
+                {filteredCatalog.length === 0 && <li className="text-sm text-gray-500 px-2 py-3 text-center">No matching plants.</li>}
+                {filteredCatalog.map((c) => {
+                  const rowBusy = loadingCropId !== null && loadingCropId.toLowerCase() === c.id.toLowerCase();
+                  const checked = isCropSelected(c.id) || rowBusy;
+                  return (
+                    <li key={c.id}>
+                      <label
+                        className={`flex items-start gap-3 px-3 py-2.5 rounded-md text-sm cursor-pointer border border-transparent hover:bg-emerald-50/90 hover:border-emerald-100 ${
+                          checked ? 'bg-emerald-50/50 border-emerald-100' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={rowBusy}
+                          onChange={(e) => {
+                            const next = e.target.checked;
+                            if (loadingCropId !== null && next) return;
+                            void onCropSelectionChange(c.id, next);
+                          }}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="font-medium text-gray-900">{c.label}</span>
+                          <span className="block text-xs text-gray-400 font-mono truncate">{c.id}</span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           {loadingCropId !== null && (
@@ -412,41 +492,6 @@ export default function InsightsPanel({ data, stackedCropOutlook, loading, loadi
                 Loading outlook for <span className="font-semibold text-gray-800">{loadingCropLabel}</span>…
               </span>
             </div>
-          )}
-
-          {showSearchResults && (
-            <ul className="overflow-y-auto max-h-[min(36vh,320px)] space-y-1 border border-slate-200 rounded-lg bg-white p-2">
-              {filteredCatalog.length === 0 && <li className="text-sm text-gray-500 px-2 py-3 text-center">No matching crops.</li>}
-              {filteredCatalog.map((c) => {
-                const rowBusy = loadingCropId !== null && loadingCropId.toLowerCase() === c.id.toLowerCase();
-                const checked = isCropSelected(c.id) || rowBusy;
-                return (
-                  <li key={c.id}>
-                    <label
-                      className={`flex items-start gap-3 px-3 py-2.5 rounded-md text-sm cursor-pointer border border-transparent hover:bg-emerald-50/90 hover:border-emerald-100 ${
-                        checked ? 'bg-emerald-50/50 border-emerald-100' : ''
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={rowBusy}
-                        onChange={(e) => {
-                          const next = e.target.checked;
-                          if (loadingCropId !== null && next) return;
-                          void onCropSelectionChange(c.id, next);
-                        }}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
-                      />
-                      <span className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900">{c.label}</span>
-                        <span className="block text-xs text-gray-400 font-mono truncate">{c.id}</span>
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
           )}
 
           {!showSearchResults && (

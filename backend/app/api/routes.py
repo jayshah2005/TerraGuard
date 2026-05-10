@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 import sys
 import os
@@ -28,6 +28,7 @@ from app.services.weather import (
 )
 from app.services import weather_cache
 from app.services.agronomic_bundle import merge_agronomic_site_features
+from app.services.land_mask import map_click_preflight
 
 router = APIRouter()
 
@@ -40,6 +41,13 @@ class RegionRequest(BaseModel):
     region_name: str = "Unknown Region"
     crop_type: str | None = None
     focus_crop_id: str | None = None
+
+
+class MapPreflightResponse(BaseModel):
+    allow_analysis: bool
+    reason: str | None = None
+    message: str | None = None
+    detail: str | None = None
 
 
 class CropSummary(BaseModel):
@@ -183,8 +191,21 @@ def _resolve_weather_bundle(req: RegionRequest) -> tuple[dict, list, str]:
 
 @router.get("/crops", response_model=list[CropSummary])
 async def list_crops():
-    """Catalog for search UI (no suitability computed)."""
+    """Plant catalog for search UI: vegetables, herbs, flowers, and field crops (no suitability computed here)."""
     return [CropSummary(**row) for row in get_catalog_summaries()]
+
+
+@router.get("/map-preflight", response_model=MapPreflightResponse)
+async def map_preflight(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+):
+    """
+    Lightweight gate before POST /analyze: Natural Earth land polygons (local GeoJSON, no HTTP).
+    Does not run weather, SoilGrids, or NDVI pipeline.
+    """
+    out = map_click_preflight(lat, lon)
+    return MapPreflightResponse(**out)
 
 
 @router.post("/analyze")

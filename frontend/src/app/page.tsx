@@ -29,6 +29,7 @@ export default function Home() {
   const [stackedCropOutlook, setStackedCropOutlook] = useState<CropOutlookRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCropId, setLoadingCropId] = useState<string | null>(null);
+  const [locationPreflightBlock, setLocationPreflightBlock] = useState<{ message: string; reason?: string } | null>(null);
   const cropOutlookInflightRef = useRef<{ cropId: string; controller: AbortController } | null>(null);
 
   const runAnalysis = useCallback(async (lat: number, lng: number) => {
@@ -95,7 +96,7 @@ export default function Home() {
           signal: controller.signal,
         });
 
-        if (!response.ok) throw new Error('Crop outlook failed');
+        if (!response.ok) throw new Error('Plant outlook failed');
 
         const next: AnalysisData = await response.json();
         const incoming = next.crop_outlook?.[0];
@@ -111,7 +112,7 @@ export default function Home() {
         });
       } catch (error: unknown) {
         if (error instanceof Error && error.name === 'AbortError') return;
-        console.error('Error loading crop outlook:', error);
+        console.error('Error loading plant outlook:', error);
       } finally {
         if (!controller.signal.aborted) {
           cropOutlookInflightRef.current = null;
@@ -124,7 +125,51 @@ export default function Home() {
 
   const handleLocationSelect = async (lat: number, lng: number) => {
     setSelectedLocation({ lat, lng });
-    await runAnalysis(lat, lng);
+    setLocationPreflightBlock(null);
+    setLoading(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const pfRes = await fetch(
+        `${backendUrl}/api/v1/map-preflight?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`
+      );
+      if (!pfRes.ok) {
+        setAnalysisData(null);
+        setStackedCropOutlook([]);
+        setLocationPreflightBlock({
+          message:
+            'Land verification request failed (backend unreachable or error). Fix the connection and try again — analysis stays blocked until we can verify dry land.',
+          reason: 'request_failed',
+        });
+        setLoading(false);
+        return;
+      }
+      const pf = (await pfRes.json()) as {
+        allow_analysis?: boolean;
+        message?: string | null;
+        reason?: string | null;
+      };
+      if (pf.allow_analysis === false) {
+        setAnalysisData(null);
+        setStackedCropOutlook([]);
+        setLocationPreflightBlock({
+          message: pf.message ?? 'Pick dry land where you can grow plants, then click again.',
+          reason: pf.reason ?? undefined,
+        });
+        setLoading(false);
+        return;
+      }
+      await runAnalysis(lat, lng);
+    } catch (err) {
+      console.error('Map preflight error:', err);
+      setAnalysisData(null);
+      setStackedCropOutlook([]);
+      setLocationPreflightBlock({
+        message:
+          'Land verification failed unexpectedly. Try again — we do not run crop analysis until the land check succeeds.',
+        reason: 'request_failed',
+      });
+      setLoading(false);
+    }
   };
 
   return (
@@ -149,8 +194,8 @@ export default function Home() {
           <div className="mb-4 flex-none">
             <h2 className="text-lg font-bold text-slate-800">Global Monitoring</h2>
             <p className="text-sm text-slate-500">
-              Select a region for climate signals and regional guidance. Open <span className="font-semibold text-slate-700">Crop outlook</span>, search the
-              catalog, and tick crops to compare suitability side by side.
+              Select a region for climate signals and regional guidance. Open <span className="font-semibold text-slate-700">Plant outlook</span>, search the
+              catalog for vegetables, herbs, flowers, or field crops, and tick plants to compare suitability side by side (home gardens welcome).
             </p>
           </div>
           <div className="flex-1 rounded-2xl relative z-0 min-h-[320px]">
@@ -165,6 +210,7 @@ export default function Home() {
             loading={loading}
             loadingCropId={loadingCropId}
             onCropSelectionChange={handleCropSelectionChange}
+            locationPreflightBlock={locationPreflightBlock}
           />
         </aside>
       </div>

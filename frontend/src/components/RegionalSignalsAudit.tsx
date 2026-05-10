@@ -296,7 +296,7 @@ interface Props {
 }
 
 export default function RegionalSignalsAudit({ features, weatherSource, coordinates }: Props) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState('');
 
   const allRows = useMemo(

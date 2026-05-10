@@ -148,12 +148,13 @@ def fallback_regional_env_insight(features: dict, forecast_summary: dict) -> str
     t = float(features.get("temp_avg_c", 20))
     hot_days = forecast_summary.get("days_high_ge_32c", 0)
     dry_streak = forecast_summary.get("max_consecutive_dry_days", 0)
+
     return (
         f"From modeled conditions (soil {soil}, ~{t:.0f}°C average, {rain:.0f} mm rain / 30d, "
         f"{hot_days} hot day(s) and up to {dry_streak} dry day(s) in the next-week proxy), "
         f"expect warm-season and drought-tolerant options to fare better when moisture is limited, "
         f"and water-loving or cool-season crops to need irrigation or timing adjustments. "
-        f"Open Crop outlook and search the catalog for a specific crop to load tailored suitability."
+        f"Open Plant outlook and search the catalog for a vegetable, herb, flower, or crop to load tailored suitability."
     )
 
 
