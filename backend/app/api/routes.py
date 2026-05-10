@@ -29,6 +29,7 @@ from app.services.weather import (
 from app.services import weather_cache
 from app.services.agronomic_bundle import merge_agronomic_site_features
 from app.services.land_mask import map_click_preflight
+from app.services.catalog_suggestions import build_suggested_crop_outlook
 
 router = APIRouter()
 
@@ -92,6 +93,7 @@ class AnalyzeResponse(BaseModel):
     crop_guidance: list[CropGuidanceItem]
     focus_crop_id: str | None = None
     weather_source: str = "synthetic_fallback"
+    suggested_crop_outlook: list[CropOutlookRow] = Field(default_factory=list)
 
 
 def _merge_portfolio_guidance(crop_outlook: list[dict], guidance: dict[str, tuple[str, str]]) -> None:
@@ -254,6 +256,7 @@ async def analyze_region(req: RegionRequest):
                 crop_guidance=crop_guidance,
                 focus_crop_id=profile["id"],
                 weather_source=weather_source,
+                suggested_crop_outlook=[],
             )
             return payload.model_dump()
 
@@ -271,6 +274,8 @@ async def analyze_region(req: RegionRequest):
         else:
             w_insight = fallback_regional_env_insight(features, forecast_stress_summary)
 
+        suggested_rows = build_suggested_crop_outlook(features, forecast)
+
         payload = AnalyzeResponse(
             region=req.region_name,
             coordinates={"lat": req.lat, "lon": req.lon},
@@ -284,6 +289,7 @@ async def analyze_region(req: RegionRequest):
             crop_guidance=crop_guidance,
             focus_crop_id=None,
             weather_source=weather_source,
+            suggested_crop_outlook=[CropOutlookRow.model_validate(row) for row in suggested_rows],
         )
         return payload.model_dump()
     except HTTPException:

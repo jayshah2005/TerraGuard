@@ -1,6 +1,20 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Leaf, Droplets, ThermometerSun, AlertTriangle, Info, MountainSnow, Sprout, ChevronDown, ChevronRight, Search, Loader2 } from 'lucide-react';
+import {
+  Leaf,
+  Droplets,
+  ThermometerSun,
+  AlertTriangle,
+  Info,
+  MountainSnow,
+  Sprout,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Loader2,
+  Check,
+  X,
+} from 'lucide-react';
 import type { AnalysisData, CropOutlookRow, CropCatalogItem } from '../types/analysis';
 import RegionalSignalsAudit from './RegionalSignalsAudit';
 import ShortRangeFieldOutlook from './ShortRangeFieldOutlook';
@@ -26,6 +40,18 @@ function suitabilityBarWidthPercent(score: number): number {
   const s = Math.min(100, Math.max(0, score));
   if (s <= 0) return 8;
   return Math.max(s, 3);
+}
+
+/** NDVI delta (current − year-ago composite): subtle hue for quick scan only */
+function ndviDeltaTone(delta: number): string {
+  if (delta > 0.02) return 'text-emerald-800';
+  if (delta < -0.02) return 'text-amber-900';
+  return 'text-emerald-900';
+}
+
+function formatNdviDelta(delta: number): string {
+  const sign = delta > 0 ? '+' : '';
+  return `${sign}${delta.toFixed(2)}`;
 }
 
 function bandTextClass(band: string): string {
@@ -190,24 +216,38 @@ export default function InsightsPanel({
         return (
           <div
             key={row.id}
-            className={`rounded-lg border bg-white transition-shadow ${open ? 'ring-2 ring-emerald-500/80 border-emerald-200' : 'border-slate-200'}`}
+            className="relative rounded-lg border border-slate-200 bg-white transition-shadow"
           >
-            <div className={`mx-3 mt-3 rounded-lg border px-3 py-2 text-sm ${verdictBannerClass(row.band)}`}>
-              <p className="font-bold leading-tight">{row.planting_verdict ?? '—'}</p>
-              <p className="text-xs mt-1 opacity-90 leading-snug">{row.planting_rationale ?? ''}</p>
-            </div>
+            <button
+              type="button"
+              className="absolute top-2 right-2 z-10 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+              aria-label={`Remove ${row.label} from outlook`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void onCropSelectionChange(row.id, false);
+              }}
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
             <button
               type="button"
               onClick={() => setExpandedId(open ? null : row.id)}
-              className="w-full text-left p-3 flex flex-col gap-2 hover:bg-slate-50/90 rounded-lg"
+              className="w-full text-left p-3 pt-3 pr-10 flex flex-col gap-2 rounded-lg hover:bg-slate-50/80"
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  {open ? <ChevronDown className="w-4 h-4 shrink-0 text-gray-500" /> : <ChevronRight className="w-4 h-4 shrink-0 text-gray-500" />}
-                  <span className="font-semibold text-gray-900 truncate">{row.label}</span>
-                  <span className={`text-xs font-bold uppercase shrink-0 ${bandTextClass(row.band)}`}>{row.band}</span>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 min-w-0 flex-1">
+                  {open ? <ChevronDown className="w-4 h-4 shrink-0 mt-1 text-gray-500" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-1 text-gray-500" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-gray-900 leading-snug">{row.label}</p>
+                    <p className="text-sm font-medium text-gray-800 mt-1.5 leading-snug">{row.planting_verdict ?? '—'}</p>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">{row.planting_rationale ?? ''}</p>
+                  </div>
                 </div>
-                <span className="text-sm font-bold text-gray-800 tabular-nums">{row.suitability_score.toFixed(0)}</span>
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <span className={`text-[10px] font-bold uppercase ${bandTextClass(row.band)}`}>{row.band}</span>
+                  <span className="text-sm font-bold text-gray-800 tabular-nums">{row.suitability_score.toFixed(0)}</span>
+                </div>
               </div>
               <div>
                 <div className="flex justify-between items-baseline mb-1">
@@ -326,10 +366,14 @@ export default function InsightsPanel({
             </div>
           </div>
 
-          <div>
-            <div className="bg-blue-50 p-5 rounded-lg border border-blue-100 text-blue-900 text-sm leading-relaxed shadow-inner">
-              <h3 className="font-semibold text-gray-800">Regional plant fit: </h3>
-              {ai_insight ?? '—'}
+          <div className={hasCropFocus ? 'opacity-95' : ''}>
+            <div
+              className={`bg-blue-50 p-5 rounded-lg border text-blue-900 text-sm leading-relaxed shadow-inner ${
+                hasCropFocus ? 'border-blue-100/80 bg-blue-50/90' : 'border-blue-100'
+              }`}
+            >
+              <h3 className="font-semibold text-gray-800">Regional plant fit</h3>
+              <p className="mt-1">{ai_insight ?? '—'}</p>
             </div>
           </div>
 
@@ -385,25 +429,88 @@ export default function InsightsPanel({
               </div>
             </div>
 
-            <div className="bg-emerald-50 p-4 rounded-lg flex flex-col col-span-2">
-              <div className="relative group flex items-center text-emerald-700 mb-2 justify-between w-full cursor-help">
-                <div className="flex items-center">
-                  <Leaf className="w-4 h-4 mr-2" />
+            <div className="bg-emerald-50 p-4 rounded-lg flex flex-col col-span-2 gap-3">
+              <div className="relative group flex items-center text-emerald-700 justify-between w-full cursor-help">
+                <div className="flex items-center min-w-0">
+                  <Leaf className="w-4 h-4 mr-2 shrink-0" />
                   <span className="text-xs uppercase font-bold">Vegetation Health (NDVI)</span>
                 </div>
-                <Info className="w-4 h-4" />
-                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
-                  Normalized Difference Vegetation Index: Ranges -1 to +1.
-                  <br />
-                  <br />
-                  &lt; 0.2: Extreme stress/Barren.
-                  <br />
-                  &gt; 0.5: Healthy dense vegetation (including productive gardens).
+                <Info className="w-4 h-4 shrink-0" aria-hidden />
+                <div className="absolute top-full left-0 right-0 mt-2 hidden group-hover:block z-50 max-h-[min(70vh,320px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl sm:left-auto sm:right-0 sm:max-w-md">
+                  <p className="font-semibold text-emerald-200">What is NDVI?</p>
+                  <p className="mt-1 text-gray-100">
+                    NDVI (Normalized Difference Vegetation Index) measures greenness from satellite imagery—roughly how much healthy vegetation covers the
+                    pixel. Typical land values fall between about{' '}
+                    <span className="whitespace-nowrap">−1 and +1</span>.
+                  </p>
+                  <ul className="mt-2 list-disc space-y-0.5 pl-4 text-gray-200">
+                    <li>
+                      <span className="font-medium text-white">Below ~0.2</span> — sparse vegetation, bare soil, urban, water, or extreme stress.
+                    </li>
+                    <li>
+                      <span className="font-medium text-white">~0.2–0.5</span> — moderate green cover (many crops, pastures, mixed landscapes).
+                    </li>
+                    <li>
+                      <span className="font-medium text-white">Above ~0.5</span> — dense green canopy (healthy crops or forest when seasonal timing aligns).
+                    </li>
+                  </ul>
+                  <p className="mt-2 border-t border-gray-600 pt-2 text-gray-200">
+                    <span className="font-semibold text-emerald-200">Current vs historical</span> — TerraGuard uses MODIS 16-day composites:{' '}
+                    <span className="font-medium text-white">Current</span> is the recent snapshot;{' '}
+                    <span className="font-medium text-white">Historical</span> is the composite closest to the <em>same calendar period last year</em> so
+                    you compare similar seasons.
+                  </p>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-emerald-900 mt-1">
-                <span className="text-xl font-semibold">{features.ndvi_current.toFixed(2)}</span>
-                <span className="text-sm font-medium">Historical: {features.ndvi_historical.toFixed(2)}</span>
+
+              <div className="grid grid-cols-2 gap-3 text-emerald-900">
+                <div className="rounded-lg border border-emerald-200/80 bg-white/60 px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">Current</p>
+                  <p className="text-xl font-semibold tabular-nums">{features.ndvi_current.toFixed(2)}</p>
+                  <p className="text-[10px] text-emerald-800/80">Recent MODIS composite</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200/80 bg-white/60 px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">Historical</p>
+                  <p className="text-xl font-semibold tabular-nums">{features.ndvi_historical.toFixed(2)}</p>
+                  <p className="text-[10px] text-emerald-800/80">~Same period last year</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200/90 bg-white/70 px-3 py-2">
+                <div className="relative group/delta flex items-center gap-1.5 min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-900">Δ NDVI</span>
+                  <span className="text-[10px] font-normal normal-case text-emerald-800/90">(year-over-year)</span>
+                  <Info className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
+                  <div className="absolute bottom-full right-0 mb-2 hidden w-[min(100vw-2rem,22rem)] group-hover/delta:block z-50 max-h-[min(70vh,280px)] overflow-y-auto rounded-lg border border-slate-700 bg-gray-800 p-3 text-left text-[11px] leading-snug text-white shadow-xl">
+                    <p className="font-semibold text-emerald-200">What is Δ NDVI?</p>
+                    <p className="mt-1 text-gray-100">
+                      Year-over-year change: <span className="font-medium text-white">current NDVI minus historical NDVI</span> (same seasonal window,
+                      different years). It is <span className="font-medium text-white">not</span> a crop suitability score—it only compares satellite greenness
+                      between two periods.
+                    </p>
+                    <p className="mt-2 font-medium text-white">How to read it</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-gray-200">
+                      <li>
+                        <span className="text-white">Positive</span> — canopy looks greener than last year at this time (recovery, better moisture,
+                        growth stage, or land-use change).
+                      </li>
+                      <li>
+                        <span className="text-white">Negative</span> — less green than last year (drought stress, senescence, harvest, bare soil, clouds,
+                        or fire).
+                      </li>
+                      <li>
+                        <span className="text-white">Near zero</span> — similar seasonal greenness to last year.
+                      </li>
+                    </ul>
+                    <p className="mt-2 border-t border-gray-600 pt-2 text-gray-300">
+                      Use Plant outlook and weather/soil context before drawing field decisions; NDVI is one layer and can mislead on small plots, mixed
+                      pixels, or during clouds.
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-lg font-bold tabular-nums ${ndviDeltaTone(features.ndvi_current - features.ndvi_historical)}`}>
+                  {formatNdviDelta(features.ndvi_current - features.ndvi_historical)}
+                </span>
               </div>
             </div>
           </div>
@@ -439,13 +546,13 @@ export default function InsightsPanel({
             </div>
           </div>
 
-          <div className="relative z-20 isolate">
+          <div className={`relative isolate ${showSearchResults ? 'z-[60]' : 'z-20'}`}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
             <input
               type="search"
               value={cropSearch}
               onChange={(e) => setCropSearch(e.target.value)}
-              placeholder="Search plants (e.g. tomato, basil, marigold, wheat)…"
+              placeholder="Crop · search catalog…"
               className="relative z-10 w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
               aria-label="Search plant catalog"
               aria-expanded={showSearchResults}
@@ -455,20 +562,34 @@ export default function InsightsPanel({
             {showSearchResults && (
               <ul
                 id="plant-catalog-search-results"
-                className="absolute left-0 right-0 top-full z-30 mt-1 max-h-[min(36vh,320px)] overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg ring-1 ring-black/5"
+                className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-[min(36vh,320px)] overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2 shadow-xl ring-1 ring-black/10"
               >
                 {filteredCatalog.length === 0 && <li className="text-sm text-gray-500 px-2 py-3 text-center">No matching plants.</li>}
                 {filteredCatalog.map((c) => {
                   const rowBusy = loadingCropId !== null && loadingCropId.toLowerCase() === c.id.toLowerCase();
                   const checked = isCropSelected(c.id) || rowBusy;
+                  const pickId = `plant-catalog-pick-${c.id}`;
                   return (
                     <li key={c.id}>
                       <label
-                        className={`flex items-start gap-3 px-3 py-2.5 rounded-md text-sm cursor-pointer border border-transparent hover:bg-emerald-50/90 hover:border-emerald-100 ${
+                        htmlFor={pickId}
+                        className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-md text-sm cursor-pointer border border-transparent hover:bg-emerald-50/90 hover:border-emerald-100 ${
                           checked ? 'bg-emerald-50/50 border-emerald-100' : ''
                         }`}
                       >
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium text-gray-900 block truncate">{c.label}</span>
+                          <span className="block text-xs text-gray-400 font-mono truncate">{c.id}</span>
+                        </span>
+                        <span className="shrink-0 text-emerald-600 pointer-events-none" aria-hidden>
+                          {rowBusy ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : checked ? (
+                            <Check className="h-5 w-5" strokeWidth={2.5} />
+                          ) : null}
+                        </span>
                         <input
+                          id={pickId}
                           type="checkbox"
                           checked={checked}
                           disabled={rowBusy}
@@ -477,12 +598,8 @@ export default function InsightsPanel({
                             if (loadingCropId !== null && next) return;
                             void onCropSelectionChange(c.id, next);
                           }}
-                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                          className="sr-only"
                         />
-                        <span className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-900">{c.label}</span>
-                          <span className="block text-xs text-gray-400 font-mono truncate">{c.id}</span>
-                        </span>
                       </label>
                     </li>
                   );

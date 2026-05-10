@@ -104,6 +104,24 @@ Reply:
         return None, None, "Warning: Unable to generate remote insights due to an API error."
 
 
+def _regional_stress_hint(features: dict, forecast_summary: dict) -> str:
+    """Deterministic one-liner from shared signals so Watsonx aligns tone with harsh sites (not crop-specific)."""
+    rain = float(features.get("rainfall_30d_mm", 0) or 0)
+    hot_days = int(forecast_summary.get("days_high_ge_32c", 0) or 0)
+    dry_streak = int(forecast_summary.get("max_consecutive_dry_days", 0) or 0)
+    days_count = max(1, int(forecast_summary.get("days_count", 7) or 7))
+    hints: list[str] = []
+    if rain < 35:
+        hints.append("recent 30-day rainfall is low")
+    if hot_days >= max(3, (days_count + 1) // 2):
+        hints.append("multiple forecast days reach at least 32°C highs")
+    if dry_streak >= 4:
+        hints.append("a long run of very dry days in the weekly outlook (<2 mm rain)")
+    if hints:
+        return "Stress-oriented context from the same summary fields: " + "; ".join(hints) + "."
+    return "Stress-oriented context: weekly outlook does not show extreme generic heat/dry signals from these summary fields alone."
+
+
 def analyze_regional_env_insight_watson(features: dict, forecast_summary: dict) -> str | None:
     """
     Regional narrative without per-crop scores: what generally grows well under these conditions.
@@ -113,16 +131,26 @@ def analyze_regional_env_insight_watson(features: dict, forecast_summary: dict) 
     if not model:
         return None
 
+    align = _regional_stress_hint(features, forecast_summary)
+
     prompt = f"""You are an agricultural advisor. Use ONLY the environmental facts below — do not invent numbers.
 
-Site facts:
+Site facts (internal grounding — do not restate every number in your answer):
 - Soil: {features.get('soil_type', 'Unknown')}
 - NDVI current / historical: {features.get('ndvi_current')} / {features.get('ndvi_historical')}
 - Rainfall 30d (mm): {features.get('rainfall_30d_mm')}
 - Avg temperature (C): {features.get('temp_avg_c')}
 - 7-day outlook summary: cumulative_rain_mm={forecast_summary.get('cumulative_rain_mm')}, max_high_c={forecast_summary.get('max_high_c')}, min_low_c={forecast_summary.get('min_low_c')}, days_high_ge_32c={forecast_summary.get('days_high_ge_32c')}, max_consecutive_dry_days={forecast_summary.get('max_consecutive_dry_days')}
+- {align}
 
-Write exactly 2 or 3 sentences on what broad categories of crops (e.g. cool-season vs warm-season, drought-tolerant vs water-loving) are more or less likely to succeed here and why. Do not name specific catalog scores.
+Your INSIGHT must focus on WHAT CAN GROW: field crops, vegetables, culinary herbs, and ornamental flowers readers might try in this region. Name concrete examples (generic plant names, not catalog IDs).
+
+Constraints:
+- Write exactly 3 sentences (or 2 if you must stay concise).
+- At least TWO sentences must give example plants across categories (e.g. staple grains/legumes, vegetables, herbs, bedding flowers), suited to the facts.
+- At most ONE short clause across the whole reply may summarize abiotic context (moisture/heat/greenness)—do NOT pack NDVI, rainfall, and weekly outlook into separate sentences or read like a sensor report.
+- If the alignment hint describes heat, drought, or low rainfall, qualify expectations (irrigation, drought tolerance, heat risk); do not imply easy success for thirsty or cool-season plants without qualification.
+- End by telling the user to open Plant outlook for catalog-specific suitability scores.
 
 You MUST reply in exactly this format with NO other text:
 INSIGHT: [your text]
@@ -146,15 +174,28 @@ def fallback_regional_env_insight(features: dict, forecast_summary: dict) -> str
     soil = features.get("soil_type", "Unknown")
     rain = float(features.get("rainfall_30d_mm", 0))
     t = float(features.get("temp_avg_c", 20))
-    hot_days = forecast_summary.get("days_high_ge_32c", 0)
-    dry_streak = forecast_summary.get("max_consecutive_dry_days", 0)
+    hot_days = int(forecast_summary.get("days_high_ge_32c", 0) or 0)
+    dry_streak = int(forecast_summary.get("max_consecutive_dry_days", 0) or 0)
+    days_count = max(1, int(forecast_summary.get("days_count", 7) or 7))
+
+    env_short = (
+        f"Quick site sketch: {soil} soil, ~{t:.0f}°C average, {rain:.0f} mm rain / 30d"
+        f" (brief forecast stress: {hot_days} hot days ≥32°C, up to {dry_streak} very-dry days in the weekly window)."
+    )
+
+    harsh = rain < 35 or hot_days >= max(3, (days_count + 1) // 2) or dry_streak >= 4
+
+    if harsh:
+        return (
+            f"{env_short} "
+            "Expect tougher conditions for thirsty vegetables, tender herbs, and bedding flowers unless you irrigate—favor drought-smart field crops, hardy veggies, and heat-tolerant ornamentals where rainfall is tight. "
+            "Use Plant outlook to tick vegetables, herbs, flowers, and field crops from the catalog for scored suitability."
+        )
 
     return (
-        f"From modeled conditions (soil {soil}, ~{t:.0f}°C average, {rain:.0f} mm rain / 30d, "
-        f"{hot_days} hot day(s) and up to {dry_streak} dry day(s) in the next-week proxy), "
-        f"expect warm-season and drought-tolerant options to fare better when moisture is limited, "
-        f"and water-loving or cool-season crops to need irrigation or timing adjustments. "
-        f"Open Plant outlook and search the catalog for a vegetable, herb, flower, or crop to load tailored suitability."
+        f"{env_short} "
+        "Look for field staples, vegetables, culinary herbs, and garden flowers that match your moisture and heat regime—warm-season and drought-tolerant groups often fit when rain is modest; cooler or wetter-loving plants may need irrigation or timing tweaks. "
+        "Plant outlook lists catalog entries so you can compare herbs, flowers, and crops with tailored scores."
     )
 
 

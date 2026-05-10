@@ -51,8 +51,9 @@ export default function Home() {
 
       if (!response.ok) throw new Error('Analysis failed');
 
-      setAnalysisData(await response.json());
-      setStackedCropOutlook([]);
+      const parsed = (await response.json()) as AnalysisData;
+      setAnalysisData(parsed);
+      setStackedCropOutlook(parsed.suggested_crop_outlook ?? []);
     } catch (error) {
       console.error('Error analyzing region:', error);
     } finally {
@@ -105,6 +106,8 @@ export default function Home() {
         }
         setAnalysisData((prev) => {
           const merged: AnalysisData = { ...next };
+          // Focus-crop responses omit ai_insight (null). Keep the initial regional IBM paragraph so we do not flash empty text;
+          // InsightsPanel shows a disclaimer when catalog crops are loaded so Plant outlook stays authoritative for scores.
           if ((next.ai_insight === null || next.ai_insight === undefined) && prev?.ai_insight) {
             merged.ai_insight = prev.ai_insight;
           }
@@ -173,47 +176,33 @@ export default function Home() {
   };
 
   return (
-    <main className="flex h-[100dvh] max-h-[100dvh] flex-col bg-slate-50 overflow-hidden">
-      <header className="shrink-0 bg-white shadow-sm border-b px-8 py-4 flex items-center justify-between z-10 w-full">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">T</span>
+    <main className="flex h-[100dvh] max-h-[100dvh] flex-row bg-slate-100 overflow-hidden">
+      <section className="flex-[2] min-w-0 min-h-0 relative flex flex-col">
+        <div className="absolute top-4 left-4 z-[1000] flex items-center gap-2 pointer-events-none select-none">
+          <div className="flex items-center gap-2 bg-transparent">
+            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
+              <span className="text-white font-bold text-lg">T</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-emerald-950 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
+              TerraGuard
+            </h1>
           </div>
-          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-700 to-teal-900 tracking-tight">
-            TerraGuard
-          </h1>
         </div>
-
-        <div className="text-sm font-semibold text-emerald-800 bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-100">
-          SDG 2 & 13 Prototype
+        <div className="flex-1 min-h-0 relative">
+          <MapWithNoSSR onLocationSelect={handleLocationSelect} selectedLocation={selectedLocation} />
         </div>
-      </header>
+      </section>
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        <section className="w-2/3 p-6 flex flex-col min-h-0 overflow-hidden relative">
-          <div className="mb-4 flex-none">
-            <h2 className="text-lg font-bold text-slate-800">Global Monitoring</h2>
-            <p className="text-sm text-slate-500">
-              Select a region for climate signals and regional guidance. Open <span className="font-semibold text-slate-700">Plant outlook</span>, search the
-              catalog for vegetables, herbs, flowers, or field crops, and tick plants to compare suitability side by side (home gardens welcome).
-            </p>
-          </div>
-          <div className="flex-1 rounded-2xl relative z-0 min-h-[320px]">
-            <MapWithNoSSR onLocationSelect={handleLocationSelect} selectedLocation={selectedLocation} />
-          </div>
-        </section>
-
-        <aside className="w-1/3 min-w-[280px] max-w-xl shrink-0 flex flex-col min-h-0 overflow-hidden border-l border-slate-200 bg-white shadow-xl">
-          <InsightsPanel
-            data={analysisData}
-            stackedCropOutlook={stackedCropOutlook}
-            loading={loading}
-            loadingCropId={loadingCropId}
-            onCropSelectionChange={handleCropSelectionChange}
-            locationPreflightBlock={locationPreflightBlock}
-          />
-        </aside>
-      </div>
+      <aside className="flex-1 min-w-[280px] max-w-xl shrink-0 flex flex-col min-h-0 overflow-hidden border-l border-slate-200 bg-white shadow-xl">
+        <InsightsPanel
+          data={analysisData}
+          stackedCropOutlook={stackedCropOutlook}
+          loading={loading}
+          loadingCropId={loadingCropId}
+          onCropSelectionChange={handleCropSelectionChange}
+          locationPreflightBlock={locationPreflightBlock}
+        />
+      </aside>
     </main>
   );
 }

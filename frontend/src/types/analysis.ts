@@ -102,4 +102,6 @@ export interface AnalysisData {
   forecast_stress_summary?: ForecastStressSummary;
   crop_outlook?: CropOutlookRow[];
   crop_guidance?: CropGuidanceItem[];
+  /** Initial-analyze suggestions for Plant outlook (deterministic rankings). */
+  suggested_crop_outlook?: CropOutlookRow[];
 }
