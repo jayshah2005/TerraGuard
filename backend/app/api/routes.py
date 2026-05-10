@@ -105,6 +105,21 @@ def _merge_portfolio_guidance(crop_outlook: list[dict], guidance: dict[str, tupl
             row["mitigate_text"] = mit
 
 
+def _risk_level_for_score(score: float) -> str:
+    if score >= 80:
+        return "Critical"
+    if score >= 60:
+        return "High"
+    if score >= 35:
+        return "Moderate"
+    return "Low"
+
+
+def _risk_from_suitability(suitability_score: float) -> tuple[float, str]:
+    risk_score = max(0.0, min(100.0, 100.0 - float(suitability_score)))
+    return risk_score, _risk_level_for_score(risk_score)
+
+
 def _build_env_bundle_synthetic(req: RegionRequest):
     """Fallback: full synthetic env when Open-Meteo is unavailable."""
     seed_val = int(hashlib.md5(f"{req.lat:.2f},{req.lon:.2f}".encode()).hexdigest(), 16)
@@ -230,7 +245,8 @@ async def analyze_region(req: RegionRequest):
             _merge_portfolio_guidance(crop_outlook, portfolio_map)
 
             headline_crop = profile["label"]
-            w_score, w_level = predict_risk(features, headline_crop)
+            suitability_score = float(crop_outlook[0].get("suitability_score", 50.0))
+            w_score, w_level = _risk_from_suitability(suitability_score)
             w_insight = None
 
             crop_guidance = [

@@ -30,12 +30,8 @@ export default function Home() {
   const [locationPreflightBlock, setLocationPreflightBlock] = useState<{ message: string; reason?: string } | null>(null);
   const cropOutlookInflightRef = useRef<{ cropId: string; controller: AbortController } | null>(null);
 
-  const runAnalysis = useCallback(async (lat: number, lng: number) => {
-    cropOutlookInflightRef.current?.controller.abort();
-    cropOutlookInflightRef.current = null;
-    setLoadingCropId(null);
-    setLoading(true);
-    try {
+  const fetchAnalysis = useCallback(
+    async (lat: number, lng: number, focusCropId?: string | null): Promise<AnalysisData> => {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
       const response = await fetch(`${backendUrl}/api/v1/analyze`, {
         method: 'POST',
@@ -44,12 +40,24 @@ export default function Home() {
           lat,
           lon: lng,
           region_name: regionLabel(lat, lng),
+          ...(focusCropId ? { focus_crop_id: focusCropId } : {}),
         }),
       });
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+      return (await response.json()) as AnalysisData;
+    },
+    []
+  );
 
-      if (!response.ok) throw new Error('Analysis failed');
-
-      const parsed = (await response.json()) as AnalysisData;
+  const runAnalysis = useCallback(async (lat: number, lng: number) => {
+    cropOutlookInflightRef.current?.controller.abort();
+    cropOutlookInflightRef.current = null;
+    setLoadingCropId(null);
+    setLoading(true);
+    try {
+      const parsed = await fetchAnalysis(lat, lng, null);
       setAnalysisData(parsed);
       setStackedCropOutlook(parsed.suggested_crop_outlook ?? []);
     } catch (error) {
@@ -57,7 +65,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchAnalysis]);
 
   const handleCropSelectionChange = useCallback(
     async (cropId: string, selected: boolean) => {
@@ -65,7 +73,25 @@ export default function Home() {
       const idNorm = cropId.trim().toLowerCase();
 
       if (!selected) {
-        setStackedCropOutlook((prev) => prev.filter((r) => r.id.toLowerCase() !== idNorm));
+        const remainingRows = stackedCropOutlook.filter((r) => r.id.toLowerCase() !== idNorm);
+        if (remainingRows.length === stackedCropOutlook.length) return;
+        setStackedCropOutlook(remainingRows);
+
+        const nextFocusId = remainingRows[0]?.id ?? null;
+        try {
+          const { lat, lng } = selectedLocation;
+          const next = await fetchAnalysis(lat, lng, nextFocusId);
+          setAnalysisData((prev) => {
+            const merged: AnalysisData = { ...next };
+            if ((next.ai_insight === null || next.ai_insight === undefined) && prev?.ai_insight) {
+              merged.ai_insight = prev.ai_insight;
+            }
+            return merged;
+          });
+        } catch (error) {
+          console.error('Error refreshing risk headline:', error);
+        }
+
         const inf = cropOutlookInflightRef.current;
         if (inf && inf.cropId.toLowerCase() === idNorm) {
           inf.controller.abort();
@@ -121,7 +147,7 @@ export default function Home() {
         }
       }
     },
-    [selectedLocation]
+    [fetchAnalysis, selectedLocation, stackedCropOutlook]
   );
 
   const handleLocationSelect = async (lat: number, lng: number) => {

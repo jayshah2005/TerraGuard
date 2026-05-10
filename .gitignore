@@ -35,7 +35,7 @@ build/
 *.bak
 
 # Frontend (Next.js)
-.next/
+frontend/.next/
 out/
 coverage/
 

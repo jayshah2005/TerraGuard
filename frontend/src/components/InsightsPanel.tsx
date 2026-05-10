@@ -31,6 +31,83 @@ const STRESS_LABELS: Record<string, string> = {
   forecast_dry_spell: 'Dry spell',
 };
 
+type SoilInfo = {
+  summary: string;
+  strengths: string;
+  watchouts: string;
+  tips: string;
+};
+
+const SOIL_INFO_BY_KEY: Record<string, SoilInfo> = {
+  loam: {
+    summary: 'Balanced mix of sand, silt, and clay.',
+    strengths: 'Good nutrient retention while still draining reasonably well.',
+    watchouts: 'Can compact over time under heavy traffic.',
+    tips: 'Add compost seasonally to keep structure loose and biologically active.',
+  },
+  clay: {
+    summary: 'Very fine particles; dense and moisture-retentive.',
+    strengths: 'Holds nutrients and water for longer periods.',
+    watchouts: 'Slow drainage can increase waterlogging and root disease risk.',
+    tips: 'Use raised beds, improve organic matter, and avoid overwatering.',
+  },
+  silt: {
+    summary: 'Fine-textured, smooth soil with moderate water holding.',
+    strengths: 'Often fertile and easy for roots when structured well.',
+    watchouts: 'Surface crusting and compaction can reduce aeration.',
+    tips: 'Mulch and add compost to protect structure and reduce crusting.',
+  },
+  sandy: {
+    summary: 'Coarse particles with fast drainage.',
+    strengths: 'Warms quickly and has strong aeration for roots.',
+    watchouts: 'Low water and nutrient retention can stress crops in dry periods.',
+    tips: 'Increase organic matter and irrigate in smaller, more frequent cycles.',
+  },
+  'sandy clay': {
+    summary: 'Mixed texture: faster drainage than clay, more hold than sand.',
+    strengths: 'Can balance aeration and moisture when managed well.',
+    watchouts: 'Still variable across the field; can harden if low in organic matter.',
+    tips: 'Monitor moisture closely and maintain organic inputs to stabilize structure.',
+  },
+  gravel: {
+    summary: 'Rocky, very coarse substrate with minimal fine soil.',
+    strengths: 'Excellent drainage and low standing-water risk.',
+    watchouts: 'Very low nutrient and water holding; roots can struggle to establish.',
+    tips: 'Use heavy organic amendments or containers/raised beds for sensitive plants.',
+  },
+  peat: {
+    summary: 'Organic-rich, dark soil with high moisture retention.',
+    strengths: 'High organic matter and good water storage.',
+    watchouts: 'Can stay too wet and acidic for some crops if unmanaged.',
+    tips: 'Check pH, improve drainage where needed, and avoid chronic saturation.',
+  },
+  aridisol: {
+    summary: 'Dry-climate soil with low natural moisture availability.',
+    strengths: 'Can be productive with irrigation and careful fertility management.',
+    watchouts: 'Moisture deficit and salinity stress are common risks.',
+    tips: 'Prioritize efficient irrigation, mulching, and salt-aware water management.',
+  },
+};
+
+function getSoilInfo(soilType?: string): SoilInfo {
+  const raw = (soilType || '').trim().toLowerCase();
+  if (!raw) return SOIL_INFO_BY_KEY.loam;
+  if (SOIL_INFO_BY_KEY[raw]) return SOIL_INFO_BY_KEY[raw];
+  if (raw.includes('sandy') && raw.includes('clay')) return SOIL_INFO_BY_KEY['sandy clay'];
+  if (raw.includes('sandy')) return SOIL_INFO_BY_KEY.sandy;
+  if (raw.includes('clay')) return SOIL_INFO_BY_KEY.clay;
+  if (raw.includes('silt')) return SOIL_INFO_BY_KEY.silt;
+  if (raw.includes('peat')) return SOIL_INFO_BY_KEY.peat;
+  if (raw.includes('gravel')) return SOIL_INFO_BY_KEY.gravel;
+  if (raw.includes('aridisol')) return SOIL_INFO_BY_KEY.aridisol;
+  return {
+    summary: 'Mapped soil class from regional sources.',
+    strengths: 'Useful as a baseline signal for matching plant profiles.',
+    watchouts: 'Local field variation can differ from map-scale classification.',
+    tips: 'Validate with on-site checks before major planting decisions.',
+  };
+}
+
 function suitabilityBarColor(score: number): string {
   if (score >= 70) return 'bg-emerald-500';
   if (score >= 45) return 'bg-amber-500';
@@ -82,6 +159,8 @@ interface Props {
 
 const PLANT_OUTLOOK_HELP =
   'Search the catalog for vegetables, herbs, flowers, or field crops. Tick plants to load suitability for home gardens or farms. Untick to remove. Several plants can be compared at once. Scores use your regional signals and short-range outlook on the Analysis tab.';
+const AI_WARNING_SHORT =
+  'AI-assisted output. Use this as guidance and verify with local observations or expert advice.';
 
 export default function InsightsPanel({
   data,
@@ -279,6 +358,8 @@ export default function InsightsPanel({
     weather_source,
     coordinates,
   } = data;
+  const soilLabel = features.soil_type || 'Loam';
+  const soilInfo = getSoilInfo(features.soil_type);
   const hasCropFocus = stackedCropOutlook.length > 0;
 
   let riskColorBg = 'bg-emerald-500';
@@ -365,6 +446,16 @@ export default function InsightsPanel({
             </button>
             {open && (
               <div className="px-3 pb-3 pt-0 text-sm border-t border-slate-100 bg-slate-50/50 rounded-b-lg">
+                <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-700">Guidance notes</span>
+                  <div className="group relative inline-flex cursor-help">
+                    <Info className="h-3.5 w-3.5 text-slate-500" aria-hidden />
+                    <div className="pointer-events-none absolute left-0 top-full z-[10080] mt-1 hidden w-72 rounded-lg border border-slate-700 bg-gray-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-xl group-hover:block">
+                      Risks and mitigation text may be AI-generated when remote models are available, or deterministic fallback text when AI is offline.{' '}
+                      {AI_WARNING_SHORT}
+                    </div>
+                  </div>
+                </div>
                 <p className="text-gray-700 mt-3">
                   <span className="font-semibold text-gray-900">Risks: </span>
                   {row.risks_text}
@@ -433,8 +524,8 @@ export default function InsightsPanel({
                 <Info className="w-4 h-4 opacity-70" />
                 <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-[10050]">
                   {hasCropFocus
-                    ? `Heuristic failure risk for ${crop_type} (most recently loaded plant) using the local rules engine.`
-                    : 'Placeholder risk using Maize as a baseline until you add a plant under Plant outlook (then this updates to the latest plant you select).'}
+                    ? `AI-assisted advisory risk for ${crop_type} (most recently loaded plant), summarized from model-backed analysis context and the latest plant suitability at this site. ${AI_WARNING_SHORT}`
+                    : `AI-assisted advisory baseline using Maize until you add a plant under Plant outlook (then this updates to the latest plant you select). ${AI_WARNING_SHORT}`}
                 </div>
               </div>
             </div>
@@ -453,7 +544,15 @@ export default function InsightsPanel({
                 hasCropFocus ? 'border-blue-100/80 bg-blue-50/90' : 'border-blue-100'
               }`}
             >
-              <h3 className="font-semibold text-gray-800">Regional plant fit</h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-semibold text-gray-800">Regional plant fit</h3>
+                <div className="group relative inline-flex cursor-help">
+                  <Info className="h-3.5 w-3.5 text-blue-700/80" aria-hidden />
+                  <div className="pointer-events-none absolute left-0 top-full z-[10070] mt-1 hidden w-72 rounded-lg border border-slate-700 bg-gray-900 px-3 py-2 text-[11px] leading-relaxed text-white shadow-xl group-hover:block">
+                    This regional narrative is AI-generated text based on environmental inputs. {AI_WARNING_SHORT}
+                  </div>
+                </div>
+              </div>
               <p className="mt-1">{ai_insight ?? '—'}</p>
             </div>
           </div>
@@ -472,12 +571,23 @@ export default function InsightsPanel({
                   <span className="text-xs uppercase font-bold">Soil Substrate</span>
                 </div>
                 <Info className="w-4 h-4" />
-                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-72 p-2 bg-gray-800 text-white text-xs rounded shadow-lg z-[10050]">
-                  Soil class from ISRIC SoilGrids (WRB) when available, mapped to catalog buckets (see “Signals & data sources”). Sandy soils increase drought
-                  sensitivity; Clay retains moisture but raises waterlogging risk.
+                <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-80 rounded-lg border border-slate-700 bg-gray-800 p-3 text-xs text-white shadow-lg z-[10050]">
+                  <p className="font-semibold text-amber-200">Current soil: {soilLabel}</p>
+                  <p className="mt-1 text-gray-100">{soilInfo.summary}</p>
+                  <ul className="mt-2 space-y-1 text-gray-200">
+                    <li>
+                      <span className="font-medium text-white">Strength:</span> {soilInfo.strengths}
+                    </li>
+                    <li>
+                      <span className="font-medium text-white">Watch out:</span> {soilInfo.watchouts}
+                    </li>
+                    <li>
+                      <span className="font-medium text-white">Tip:</span> {soilInfo.tips}
+                    </li>
+                  </ul>
                 </div>
               </div>
-              <span className="text-xl font-semibold text-amber-900">{features.soil_type || 'Loam'} Baseline</span>
+              <span className="text-xl font-semibold text-amber-900">{soilLabel} Baseline</span>
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg flex flex-col">
